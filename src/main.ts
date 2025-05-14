@@ -233,25 +233,17 @@ export default (options: ComponentOptions) => {
 					const element = currentNode as Element
 
 					// Traverse all attributes
+					// Detect :attr="" bindings, such as :src="imageUrl"
 					Array.from(element.attributes).forEach(attr => {
-						const value = attr.value
-						if (value.includes('{{')) {
-							// Extract the expression
-							const matches = value.match(/\{\{\s*([^}]+)\s*\}\}/g)
-							if (matches) {
-								matches.forEach(match => {
-									const expr = match.replace(/\{\{\s*|\s*\}\}/g, '').trim()
+						if (attr.name.startsWith(':')) {
+							const attrName = attr.name.substring(1) // Remove ':'
+							const expr = attr.value.trim()
 
-									// For attribute bindings, we need a special update function
-									this._setupAttributeBinding(element, attr.name, expr, value)
+							// Remove the attribute, as it is not a standard HTML attribute
+							element.removeAttribute(attr.name)
 
-									// Record dependency relationship
-									if (!this._stateToElementsMap[expr]) {
-										this._stateToElementsMap[expr] = new Set()
-									}
-									this._stateToElementsMap[expr].add(element as HTMLElement)
-								})
-							}
+							// Set up attribute binding
+							this._setupAttributeBinding(element, attrName, expr, attr.value)
 						}
 					})
 
