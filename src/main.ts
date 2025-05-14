@@ -1,5 +1,6 @@
 interface CustomElement extends HTMLElement {
 	setState(key_path: string, value: any): void
+	getState(key_path: string): any
 }
 
 interface ComponentOptions {
@@ -25,8 +26,8 @@ export default (options: ComponentOptions) => {
 
 			// copy state from options
 			this._states = new Proxy({ ...(states || {}) }, {
-				set: (target: Record<string, any>, prop: string, value: any) => {
-					const valueRoute = prop.split('.')
+				set: (target: Record<string, any>, keyPath: string, value: any) => {
+					const valueRoute = keyPath.split('.')
 					let currentTarget = target
 					for (let i in valueRoute) {
 						const key = valueRoute[i]
@@ -39,13 +40,25 @@ export default (options: ComponentOptions) => {
 							currentTarget = currentTarget[key]
 						}
 					}
-					console.log(`State updated: ${JSON.stringify(this._states)}`)
 					// TODO: trigger dom updates
 					// TODO: trigger state update events
 					return true
 				},
-				get: (target: Record<string, any>, prop: string) => {
-					return target[prop]
+				get: (target: Record<string, any>, keyPath: string) => {
+					const valueRoute = keyPath.split('.')
+					let currentTarget = target
+					for (let i in valueRoute) {
+						const key = valueRoute[i]
+						if (parseInt(i) === valueRoute.length - 1) {
+							return currentTarget[key]
+						} else {
+							if (!currentTarget[key]) {
+								currentTarget[key] = {}
+							}
+							currentTarget = currentTarget[key]
+						}
+					}
+					return undefined
 				}
 			})
 
@@ -95,19 +108,12 @@ export default (options: ComponentOptions) => {
 		}
 
 		// state manager
-		setState(key_path: string, value: any) {
-			const valueRoute = key_path.split('.')
-			let currentTarget = this._states
-			for (let i in valueRoute) {
-				const key = valueRoute[i]
-				if (parseInt(i) === valueRoute.length - 1) {
-					currentTarget[key] = value
-				} else {
-					if (!currentTarget[key]) currentTarget[key] = {}
-					currentTarget = currentTarget[key]
-				}
-			}
-			console.log(`State updated: ${this._states}`)
+		setState(keyPath: string, value: any) {
+			this._states[keyPath] = value
+		}
+
+		getState(keyPath: string) {
+			return this._states[keyPath]
 		}
 	}
 
