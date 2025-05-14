@@ -1,11 +1,4 @@
-export default (options: {
-	tag: string
-	template: string
-	style?: string
-	onMount?: () => void
-	onUnmount?: () => void
-	onAttributeChanged?: (attrName: string, oldValue: string, newValue: string) => void
-}) => {
+export default (options: ComponentOptions) => {
 	const { tag, template, style, onMount, onUnmount, onAttributeChanged } = options
 
 	class CustomElement extends HTMLElement {
