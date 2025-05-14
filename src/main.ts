@@ -11,10 +11,11 @@ interface ComponentOptions {
 	onUnmount?: () => void
 	onAttributeChanged?: (attrName: string, oldValue: string, newValue: string) => void
 	states?: Record<string, any>
+	statesListeners?: { [key: string]: (value: any) => void }
 }
 
 export default (options: ComponentOptions) => {
-	const { tag, template, style, onMount, onUnmount, onAttributeChanged, states } = options
+	const { tag, template, style, onMount, onUnmount, onAttributeChanged, states, statesListeners } = options
 	const componentRegistry = new Map()
 	componentRegistry.set(tag, options)
 
@@ -41,7 +42,12 @@ export default (options: ComponentOptions) => {
 						}
 					}
 					// TODO: trigger dom updates
-					// TODO: trigger state update events
+
+					// trigger state update events
+					if (statesListeners && statesListeners[keyPath]) {
+						statesListeners[keyPath](value)
+					}
+
 					return true
 				},
 				get: (target: Record<string, any>, keyPath: string) => {
