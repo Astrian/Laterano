@@ -1,8 +1,12 @@
+interface CustomElement extends HTMLElement {
+	setState(key_path: string, value: any): void
+}
+
 interface ComponentOptions {
 	tag: string
 	template: string
 	style?: string
-	onMount?: () => void
+	onMount?: (this: CustomElement) => void
 	onUnmount?: () => void
 	onAttributeChanged?: (attrName: string, oldValue: string, newValue: string) => void
 	states?: Record<string, any>
@@ -13,7 +17,7 @@ export default (options: ComponentOptions) => {
 	const componentRegistry = new Map()
 	componentRegistry.set(tag, options)
 
-	class CustomElement extends HTMLElement {
+	class CustomElementImpl extends HTMLElement {
 		private _states: Record<string, any> = {}
 
 		constructor() {
@@ -22,7 +26,20 @@ export default (options: ComponentOptions) => {
 			// copy state from options
 			this._states = new Proxy({ ...(states || {}) }, {
 				set: (target: Record<string, any>, prop: string, value: any) => {
-					target[prop] = value
+					const valueRoute = prop.split('.')
+					let currentTarget = target
+					for (let i in valueRoute) {
+						const key = valueRoute[i]
+						if (parseInt(i) === valueRoute.length - 1) {
+							currentTarget[key] = value
+						} else {
+							if (!currentTarget[key]) {
+								currentTarget[key] = {}
+							}
+							currentTarget = currentTarget[key]
+						}
+					}
+					console.log(`State updated: ${JSON.stringify(this._states)}`)
 					// TODO: trigger dom updates
 					// TODO: trigger state update events
 					return true
@@ -62,11 +79,11 @@ export default (options: ComponentOptions) => {
 		}
 
 		connectedCallback() {
-			if (onMount) onMount()
+			if (onMount) onMount.call(this)
 		}
 
 		disconnectedCallback() {
-			if (onUnmount) onUnmount()
+			if (onUnmount) onUnmount.call(this)
 		}
 
 		static get observedAttributes() {
@@ -76,7 +93,23 @@ export default (options: ComponentOptions) => {
 		attributeChangedCallback(attrName: string, oldValue: string, newValue: string) {
 			if (onAttributeChanged) onAttributeChanged(attrName, oldValue, newValue)
 		}
+
+		// state manager
+		setState(key_path: string, value: any) {
+			const valueRoute = key_path.split('.')
+			let currentTarget = this._states
+			for (let i in valueRoute) {
+				const key = valueRoute[i]
+				if (parseInt(i) === valueRoute.length - 1) {
+					currentTarget[key] = value
+				} else {
+					if (!currentTarget[key]) currentTarget[key] = {}
+					currentTarget = currentTarget[key]
+				}
+			}
+			console.log(`State updated: ${this._states}`)
+		}
 	}
 
-	customElements.define(tag, CustomElement)
+	customElements.define(tag, CustomElementImpl)
 }
