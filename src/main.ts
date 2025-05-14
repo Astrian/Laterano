@@ -292,9 +292,18 @@ export default (options: ComponentOptions) => {
 			element.addEventListener(eventName, (event: Event) => {
 				try {
 					// Arrow function parsing
-					const arrowIndex = handlerValue.indexOf('=>')
-					const paramsStr = handlerValue.substring(0, arrowIndex).trim()
-					let bodyStr = handlerValue.substring(arrowIndex + 2).trim()
+					const splitted = handlerValue.split('=>')
+					if (splitted.length !== 2) {
+						throw new Error(`Invalid arrow function syntax: ${handlerValue}`)
+					}
+					const paramsStr = (() => {
+						if (splitted[0].includes('(')) {
+							return splitted[0].trim()
+						} else {
+							return `(${splitted[0].trim()})`
+						}
+					})()
+					const bodyStr = splitted[1].trim()
 
 					// Check if the function body is wrapped in {}
 					const isMultiline = bodyStr.startsWith('{') && bodyStr.endsWith('}')
@@ -302,11 +311,12 @@ export default (options: ComponentOptions) => {
 					// If it is a multiline function body, remove the outer braces
 					if (isMultiline) {
 						// Remove the outer braces
+						let bodyStr = handlerValue.split('=>')[1].trim()
 						bodyStr = bodyStr.substring(1, bodyStr.length - 1)
 
 						// Build code for multiline arrow function
 						const functionCode = `
-									return function(${paramsStr}) {
+									return function${paramsStr} {
 										${bodyStr}
 									}
 								`
@@ -320,7 +330,7 @@ export default (options: ComponentOptions) => {
 					} else {
 						// Single line arrow function, directly return expression result
 						const functionCode = `
-									return function(${paramsStr}) {
+									return function${paramsStr} {
 										return ${bodyStr}
 									}
 								`
