@@ -269,8 +269,8 @@ export default (options: ComponentOptions) => {
 							// Handle arrow function: @click="e => setState('count', count + 1)"
 							this._setupArrowFunctionHandler(element, eventName, handlerValue)
 						} else if (handlerValue.includes('(') && handlerValue.includes(')')) {
-								// Handle function call: @click="increment(5)"
-								this._setupFunctionCallHandler(element, eventName, handlerValue)
+							// Handle function call: @click="increment(5)"
+							this._setupFunctionCallHandler(element, eventName, handlerValue)
 						} else if (typeof (this as any)[handlerValue] === 'function') {
 							// Handle method reference: @click="handleClick"
 							element.addEventListener(eventName, (this as any)[handlerValue].bind(this))
@@ -287,56 +287,56 @@ export default (options: ComponentOptions) => {
 			this._textBindings = textBindings
 		}
 
-			// Handle arrow function
-			private _setupArrowFunctionHandler(element: Element, eventName: string, handlerValue: string) {
-				element.addEventListener(eventName, (event: Event) => {
-					try {
-							// Arrow function parsing
-							const arrowIndex = handlerValue.indexOf('=>')
-							const paramsStr = handlerValue.substring(0, arrowIndex).trim()
-							let bodyStr = handlerValue.substring(arrowIndex + 2).trim()
-							
-							// Check if the function body is wrapped in {}
-							const isMultiline = bodyStr.startsWith('{') && bodyStr.endsWith('}')
-							
-							// If it is a multiline function body, remove the outer braces
-							if (isMultiline) {
-								// Remove the outer braces
-								bodyStr = bodyStr.substring(1, bodyStr.length - 1)
-								
-								// Build code for multiline arrow function
-								const functionCode = `
+		// Handle arrow function
+		private _setupArrowFunctionHandler(element: Element, eventName: string, handlerValue: string) {
+			element.addEventListener(eventName, (event: Event) => {
+				try {
+					// Arrow function parsing
+					const arrowIndex = handlerValue.indexOf('=>')
+					const paramsStr = handlerValue.substring(0, arrowIndex).trim()
+					let bodyStr = handlerValue.substring(arrowIndex + 2).trim()
+
+					// Check if the function body is wrapped in {}
+					const isMultiline = bodyStr.startsWith('{') && bodyStr.endsWith('}')
+
+					// If it is a multiline function body, remove the outer braces
+					if (isMultiline) {
+						// Remove the outer braces
+						bodyStr = bodyStr.substring(1, bodyStr.length - 1)
+
+						// Build code for multiline arrow function
+						const functionCode = `
 									return function(${paramsStr}) {
 										${bodyStr}
 									}
 								`
-								
-								// Create context object
-								const context = this._createHandlerContext(event, element)
-								
-								// Create and call function
-								const handlerFn = new Function(functionCode).call(null)
-								handlerFn.apply(context, [event])
-							} else {
-								// Single line arrow function, directly return expression result
-								const functionCode = `
+
+						// Create context object
+						const context = this._createHandlerContext(event, element)
+
+						// Create and call function
+						const handlerFn = new Function(functionCode).call(null)
+						handlerFn.apply(context, [event])
+					} else {
+						// Single line arrow function, directly return expression result
+						const functionCode = `
 									return function(${paramsStr}) {
 										return ${bodyStr}
 									}
 								`
-								
-								// Create context object
-								const context = this._createHandlerContext(event, element)
-								
-								// Create and call function
-								const handlerFn = new Function(functionCode).call(null)
-								handlerFn.apply(context, [event])
-							}
-						} catch (err) {
-							console.error(`Error executing arrow function handler: ${handlerValue}`, err)
-						}
-				})
-			}
+
+						// Create context object
+						const context = this._createHandlerContext(event, element)
+
+						// Create and call function
+						const handlerFn = new Function(functionCode).call(null)
+						handlerFn.apply(context, [event])
+					}
+				} catch (err) {
+					console.error(`Error executing arrow function handler: ${handlerValue}`, err)
+				}
+			})
+		}
 
 		// Create handler context
 		private _createHandlerContext(event: Event, element: Element) {
@@ -356,62 +356,62 @@ export default (options: ComponentOptions) => {
 				setState: this.setState.bind(this),
 				getState: this.getState.bind(this)
 			}
-			
+
 			// Add all methods of the component
 			Object.getOwnPropertyNames(Object.getPrototypeOf(this)).forEach(name => {
 				if (typeof (this as any)[name] === 'function' && name !== 'constructor') {
 					context[name] = (this as any)[name].bind(this)
 				}
 			})
-			
+
 			return context
 		}
 
-			// Handle function call, such as @click="increment(5)"
-			private _setupFunctionCallHandler(element: Element, eventName: string, handlerValue: string) {
-				element.addEventListener(eventName, (event: Event) => {
-					try {
-						// Create context object
-						const context = this._createHandlerContext(event, element)
+		// Handle function call, such as @click="increment(5)"
+		private _setupFunctionCallHandler(element: Element, eventName: string, handlerValue: string) {
+			element.addEventListener(eventName, (event: Event) => {
+				try {
+					// Create context object
+					const context = this._createHandlerContext(event, element)
 
-						// Create and execute function call
-						const fnStr = `
+					// Create and execute function call
+					const fnStr = `
 							with(this) {
 								${handlerValue}
 							}
 						`
 
-						new Function(fnStr).call(context)
-					} catch (err) {
-						console.error(`Error executing function call handler: ${handlerValue}`, err)
-					}
-				})
-			}
+					new Function(fnStr).call(context)
+				} catch (err) {
+					console.error(`Error executing function call handler: ${handlerValue}`, err)
+				}
+			})
+		}
 
-			// Handle simple expression, such as @click="count++" or @input="name = $event.target.value"
-			private _setupExpressionHandler(element: Element, eventName: string, handlerValue: string) {
-				element.addEventListener(eventName, (event: Event) => {
-					try {
-						// Create context object
-						const context = this._createHandlerContext(event, element)
+		// Handle simple expression, such as @click="count++" or @input="name = $event.target.value"
+		private _setupExpressionHandler(element: Element, eventName: string, handlerValue: string) {
+			element.addEventListener(eventName, (event: Event) => {
+				try {
+					// Create context object
+					const context = this._createHandlerContext(event, element)
 
-						// Create expression function
-						const fnStr = `
+					// Create expression function
+					const fnStr = `
 							with(this) {
 								${handlerValue}
 							}
 						`
 
-						// Execute expression
-						const result = new Function(fnStr).call(context)
+					// Execute expression
+					const result = new Function(fnStr).call(context)
 
-						// If the expression returns a value, it can be used for two-way binding
-						return result
-					} catch (err) {
-						console.error(`Error executing expression handler: ${handlerValue}`, err)
-					}
-				})
-			}
+					// If the expression returns a value, it can be used for two-way binding
+					return result
+				} catch (err) {
+					console.error(`Error executing expression handler: ${handlerValue}`, err)
+				}
+			})
+		}
 
 		// Update text node
 		private _updateTextNode(node: Text, expr: string, template: string) {
