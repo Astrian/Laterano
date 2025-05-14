@@ -5,19 +5,37 @@ interface ComponentOptions {
 	onMount?: () => void
 	onUnmount?: () => void
 	onAttributeChanged?: (attrName: string, oldValue: string, newValue: string) => void
+	states?: Record<string, any>
 }
 
 export default (options: ComponentOptions) => {
-	const { tag, template, style, onMount, onUnmount, onAttributeChanged } = options
+	const { tag, template, style, onMount, onUnmount, onAttributeChanged, states } = options
 	const componentRegistry = new Map()
 	componentRegistry.set(tag, options)
 
-	const domTree = document.createElement('template')
-
 	class CustomElement extends HTMLElement {
+		private _states: Record<string, any> = {}
+
 		constructor() {
 			super()
+
+			// copy state from options
+			this._states = new Proxy({ ...(states || {}) }, {
+				set: (target: Record<string, any>, prop: string, value: any) => {
+					target[prop] = value
+					// TODO: trigger dom updates
+					// TODO: trigger state update events
+					return true
+				},
+				get: (target: Record<string, any>, prop: string) => {
+					return target[prop]
+				}
+			})
+
+			// initialize shadow dom
 			this.attachShadow({ mode: 'open' })
+
+			// initialize dom tree and append to shadow root
 			this._initialize()
 		}
 
@@ -39,6 +57,8 @@ export default (options: ComponentOptions) => {
 				container.innerHTML = template
 				this.shadowRoot?.appendChild(container)
 			}
+
+			// TODO: generate a dom tracking machanism
 		}
 
 		connectedCallback() {
