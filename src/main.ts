@@ -12,6 +12,7 @@ interface ComponentOptions {
 	onAttributeChanged?: (attrName: string, oldValue: string, newValue: string) => void
 	states?: Record<string, any>
 	statesListeners?: { [key: string]: (value: any) => void }
+	events?: { [key: string]: (event: Event) => void }
 }
 
 export default (options: ComponentOptions) => {
@@ -23,7 +24,7 @@ export default (options: ComponentOptions) => {
 		private _states: Record<string, any> = {}
 		private _stateToElementsMap: Record<string, Set<HTMLElement>> = {}
 		private _currentRenderingElement: HTMLElement | null = null
-  	private _statesListeners: Record<string, Function> = {}
+		private _statesListeners: Record<string, Function> = {}
 		private _textBindings: Array<{ node: Text, expr: string, originalContent: string }> = []
 		private _attributeBindings: Array<{ element: Element, attrName: string, expr: string, template: string }> = []
 
@@ -96,10 +97,10 @@ export default (options: ComponentOptions) => {
 				styleElement.textContent = style
 				this.shadowRoot?.appendChild(styleElement)
 			}
-			
+
 			const parser = new DOMParser()
 			const doc = parser.parseFromString(template, 'text/html')
-			
+
 			const mainContent = doc.body.firstElementChild
 			let rootElement
 
@@ -119,11 +120,11 @@ export default (options: ComponentOptions) => {
 		private _triggerDomUpdates(keyPath: string) {
 			if (this._stateToElementsMap[keyPath]) {
 				const updateQueue = new Set<HTMLElement>()
-				
+
 				this._stateToElementsMap[keyPath].forEach(element => {
 					updateQueue.add(element)
 				})
-				
+
 				this._scheduleUpdate(updateQueue)
 			}
 
@@ -160,12 +161,12 @@ export default (options: ComponentOptions) => {
 		private _updateElement(element: HTMLElement) {
 			const renderFunction = (element as any)._renderFunction
 			if (renderFunction) {
-					// Set rendering context
+				// Set rendering context
 				this._currentRenderingElement = element
-				
+
 				// Execute rendering
 				const result = renderFunction()
-				
+
 				// Update DOM
 				if (typeof result === 'string') {
 					element.innerHTML = result
@@ -173,8 +174,8 @@ export default (options: ComponentOptions) => {
 					element.innerHTML = ''
 					element.appendChild(result)
 				}
-				
-					// Clear rendering context
+
+				// Clear rendering context
 				this._currentRenderingElement = null
 			}
 		}
@@ -186,10 +187,10 @@ export default (options: ComponentOptions) => {
 				NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT,
 				null
 			)
-			
+
 			// Store nodes and expressions that need to be updated
 			const textBindings: Array<{ node: Text, expr: string, originalContent: string }> = []
-			
+
 			// Traverse the DOM tree
 			let currentNode: Node | null
 			while (currentNode = walker.nextNode()) {
@@ -197,25 +198,25 @@ export default (options: ComponentOptions) => {
 				if (currentNode.nodeType === Node.TEXT_NODE) {
 					const textContent = currentNode.textContent || ''
 					const textNode = currentNode as Text
-					
+
 					// Check if it contains Handlebars expressions {{ xxx }}
 					if (textContent.includes('{{')) {
 						// Save the original content, including expressions
 						const originalContent = textContent
-						
+
 						// Record nodes and expressions that need to be updated
 						const matches = textContent.match(/\{\{\s*([^}]+)\s*\}\}/g)
 						if (matches) {
 							matches.forEach(match => {
 								// Extract the expression content, removing {{ }} and spaces
 								const expr = match.replace(/\{\{\s*|\s*\}\}/g, '').trim()
-								
+
 								// Store the node, expression, and original content for later updates
 								textBindings.push({ node: textNode, expr, originalContent })
-								
+
 								// Set the initial value
 								this._updateTextNode(textNode, expr, originalContent)
-								
+
 								// Add dependency relationship for this state path
 								if (!this._stateToElementsMap[expr]) {
 									this._stateToElementsMap[expr] = new Set()
@@ -225,12 +226,12 @@ export default (options: ComponentOptions) => {
 						}
 					}
 				}
-				
-					// Handle element nodes (can extend to handle attribute bindings, etc.)
+
+				// Handle element nodes (can extend to handle attribute bindings, etc.)
 				else if (currentNode.nodeType === Node.ELEMENT_NODE) {
 					// Handle element attribute bindings, such as <img src="{{ imageUrl }}">
 					const element = currentNode as Element
-					
+
 					// Traverse all attributes
 					Array.from(element.attributes).forEach(attr => {
 						const value = attr.value
@@ -240,10 +241,10 @@ export default (options: ComponentOptions) => {
 							if (matches) {
 								matches.forEach(match => {
 									const expr = match.replace(/\{\{\s*|\s*\}\}/g, '').trim()
-									
-										// For attribute bindings, we need a special update function
+
+									// For attribute bindings, we need a special update function
 									this._setupAttributeBinding(element, attr.name, expr, value)
-									
+
 									// Record dependency relationship
 									if (!this._stateToElementsMap[expr]) {
 										this._stateToElementsMap[expr] = new Set()
@@ -253,29 +254,179 @@ export default (options: ComponentOptions) => {
 							}
 						}
 					})
-					
-					// Can also handle event bindings and other features here
+
+					// Process @event bindings, such as @click="handleClick"
+					const eventBindings = Array.from(element.attributes).filter(attr => attr.name.startsWith('@'))
+					eventBindings.forEach(attr => {
+						const eventName = attr.name.substring(1) // Remove '@'
+						const handlerValue = attr.value.trim()
+
+						// Remove the attribute, as it is not a standard HTML attribute
+						element.removeAttribute(attr.name)
+
+						// Handle different types of event handlers
+						if (handlerValue.includes('=>')) {
+							// Handle arrow function: @click="e => setState('count', count + 1)"
+							this._setupArrowFunctionHandler(element, eventName, handlerValue)
+						} else if (handlerValue.includes('(') && handlerValue.includes(')')) {
+								// Handle function call: @click="increment(5)"
+								this._setupFunctionCallHandler(element, eventName, handlerValue)
+						} else if (typeof (this as any)[handlerValue] === 'function') {
+							// Handle method reference: @click="handleClick"
+							element.addEventListener(eventName, (this as any)[handlerValue].bind(this))
+						} else {
+							// Handle simple expression: @click="count++" or @input="name = $event.target.value"
+							this._setupExpressionHandler(element, eventName, handlerValue)
+						}
+					})
+
 				}
 			}
-			
+
 			// Save text binding relationships for updates
 			this._textBindings = textBindings
 		}
+
+			// Handle arrow function
+			private _setupArrowFunctionHandler(element: Element, eventName: string, handlerValue: string) {
+				element.addEventListener(eventName, (event: Event) => {
+					try {
+							// Arrow function parsing
+							const arrowIndex = handlerValue.indexOf('=>')
+							const paramsStr = handlerValue.substring(0, arrowIndex).trim()
+							let bodyStr = handlerValue.substring(arrowIndex + 2).trim()
+							
+							// Check if the function body is wrapped in {}
+							const isMultiline = bodyStr.startsWith('{') && bodyStr.endsWith('}')
+							
+							// If it is a multiline function body, remove the outer braces
+							if (isMultiline) {
+								// Remove the outer braces
+								bodyStr = bodyStr.substring(1, bodyStr.length - 1)
+								
+								// Build code for multiline arrow function
+								const functionCode = `
+									return function(${paramsStr}) {
+										${bodyStr}
+									}
+								`
+								
+								// Create context object
+								const context = this._createHandlerContext(event, element)
+								
+								// Create and call function
+								const handlerFn = new Function(functionCode).call(null)
+								handlerFn.apply(context, [event])
+							} else {
+								// Single line arrow function, directly return expression result
+								const functionCode = `
+									return function(${paramsStr}) {
+										return ${bodyStr}
+									}
+								`
+								
+								// Create context object
+								const context = this._createHandlerContext(event, element)
+								
+								// Create and call function
+								const handlerFn = new Function(functionCode).call(null)
+								handlerFn.apply(context, [event])
+							}
+						} catch (err) {
+							console.error(`Error executing arrow function handler: ${handlerValue}`, err)
+						}
+				})
+			}
+
+		// Create handler context
+		private _createHandlerContext(event: Event, element: Element) {
+			// Basic context, including state
+			const context: {
+				[key: string]: any
+				$event: Event
+				$el: Element
+				this: CustomElementImpl // Provide reference to the component instance
+				setState: (keyPath: string, value: any) => void
+				getState: (keyPath: string) => any
+			} = {
+				...this._states,
+				$event: event,
+				$el: element,
+				this: this, // Provide reference to the component instance
+				setState: this.setState.bind(this),
+				getState: this.getState.bind(this)
+			}
+			
+			// Add all methods of the component
+			Object.getOwnPropertyNames(Object.getPrototypeOf(this)).forEach(name => {
+				if (typeof (this as any)[name] === 'function' && name !== 'constructor') {
+					context[name] = (this as any)[name].bind(this)
+				}
+			})
+			
+			return context
+		}
+
+			// Handle function call, such as @click="increment(5)"
+			private _setupFunctionCallHandler(element: Element, eventName: string, handlerValue: string) {
+				element.addEventListener(eventName, (event: Event) => {
+					try {
+						// Create context object
+						const context = this._createHandlerContext(event, element)
+
+						// Create and execute function call
+						const fnStr = `
+							with(this) {
+								${handlerValue}
+							}
+						`
+
+						new Function(fnStr).call(context)
+					} catch (err) {
+						console.error(`Error executing function call handler: ${handlerValue}`, err)
+					}
+				})
+			}
+
+			// Handle simple expression, such as @click="count++" or @input="name = $event.target.value"
+			private _setupExpressionHandler(element: Element, eventName: string, handlerValue: string) {
+				element.addEventListener(eventName, (event: Event) => {
+					try {
+						// Create context object
+						const context = this._createHandlerContext(event, element)
+
+						// Create expression function
+						const fnStr = `
+							with(this) {
+								${handlerValue}
+							}
+						`
+
+						// Execute expression
+						const result = new Function(fnStr).call(context)
+
+						// If the expression returns a value, it can be used for two-way binding
+						return result
+					} catch (err) {
+						console.error(`Error executing expression handler: ${handlerValue}`, err)
+					}
+				})
+			}
 
 		// Update text node
 		private _updateTextNode(node: Text, expr: string, template: string) {
 			// Replace all expressions with the current state value
 			let newContent = template
-			
+
 			const replaceExpr = (match: string, expr: string) => {
 				// Get the value of the expression
 				const value = this._getNestedState(expr.trim())
 				return value !== undefined ? String(value) : ''
 			}
-			
+
 			// Replace all {{ xxx }} expressions
 			newContent = newContent.replace(/\{\{\s*([^}]+)\s*\}\}/g, replaceExpr)
-			
+
 			// Update node content
 			node.textContent = newContent
 		}
@@ -284,17 +435,17 @@ export default (options: ComponentOptions) => {
 		private _setupAttributeBinding(element: Element, attrName: string, expr: string, template: string) {
 			// Initialize attribute value
 			const value = this._getNestedState(expr)
-			
+
 			// Set the initial attribute
 			if (value !== undefined) {
 				element.setAttribute(attrName, String(value))
 			}
-			
+
 			// Add update function to the map
 			if (!this._attributeBindings) {
 				this._attributeBindings = []
 			}
-			
+
 			this._attributeBindings.push({
 				element,
 				attrName,
@@ -308,14 +459,14 @@ export default (options: ComponentOptions) => {
 			// Handle nested paths, such as "profile.name"
 			const parts = path.split('.')
 			let result = this._states
-			
+
 			for (const part of parts) {
 				if (result === undefined || result === null) {
 					return undefined
 				}
 				result = result[part]
 			}
-			
+
 			return result
 		}
 
