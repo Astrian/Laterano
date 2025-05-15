@@ -12,11 +12,11 @@ interface ComponentOptions {
 	onAttributeChanged?: (attrName: string, oldValue: string, newValue: string) => void
 	states?: Record<string, any>
 	statesListeners?: { [key: string]: (value: any) => void }
-	events?: { [key: string]: (event: Event) => void }
+	funcs?: { [key: string]: (...args: any[]) => void }
 }
 
 export default (options: ComponentOptions) => {
-	const { tag, template, style, onMount, onUnmount, onAttributeChanged, states, statesListeners } = options
+	const { tag, template, style, onMount, onUnmount, onAttributeChanged, states, statesListeners, funcs } = options
 	const componentRegistry = new Map()
 	componentRegistry.set(tag, options)
 
@@ -1002,8 +1002,22 @@ export default (options: ComponentOptions) => {
 			this._states[keyPath] = value
 		}
 
-		getState(keyPath: string) {
-			return this._states[keyPath]
+		getState(keyPath: string): any {
+			const parts = keyPath.split('.')
+			let result = this._states
+			for (const part of parts) {
+				if (result === undefined || result === null) {
+					return undefined
+				}
+				result = result[part]
+			}
+			return result
+		}
+
+		// function trigger
+		triggerFunc(eventName: string, ...args: any[]) {
+			if (funcs && funcs[eventName])
+				funcs[eventName].call(this, ...args)
 		}
 	}
 
