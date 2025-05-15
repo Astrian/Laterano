@@ -418,6 +418,19 @@ export default (options: ComponentOptions) => {
 					return
 				}
 
+				const parentNode = placeholder.parentNode
+				if (!parentNode) {
+					console.error("Placeholder's parentNode is null. Cannot update list.")
+					return
+				}
+
+				// Detach all currently rendered DOM items managed by this instance.
+				renderedItems.forEach(item => {
+					if (item.element.parentNode === parentNode) {
+						parentNode.removeChild(item.element);
+					}
+				});
+
 				// Get key attribute if available
 				const keyAttr = template.getAttribute('%key')
 				if (!keyAttr) console.warn(`%key attribute not found in the template, which is not a recommended practice.`)
@@ -690,7 +703,10 @@ export default (options: ComponentOptions) => {
 				// Recursively process this item and its children
 				this._processElementWithItemContext(itemElement, nestedItemContext)
 
-				// Add the element to the DOM
+				// TODO: detect list items existed inside the view, use replace instead of remove and re-add,
+				// to improve performance
+				
+				// Insert the item element into the DOM
 				placeholder.parentNode?.insertBefore(itemElement, placeholder.nextSibling)
 			})
 		}
