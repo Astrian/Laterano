@@ -433,6 +433,9 @@ export default (options: ComponentOptions) => {
 				// Clear rendered items
 				renderedItems.length = 0
 
+				// document fragment
+				const fragment = document.createDocumentFragment()
+
 				// Create or update items in the list
 				collection.forEach((item, index) => {
 					// Determine the key for this item
@@ -471,9 +474,12 @@ export default (options: ComponentOptions) => {
 					// We will use recursive processing here!
 					this._processElementWithItemContext(itemElement, itemContext)
 
-					// Insert the element at the correct position in the DOM
-					placeholder.parentNode?.insertBefore(itemElement, placeholder.nextSibling)
+					// Insert the element to the document fragment
+					fragment.appendChild(itemElement)
 				})
+
+				// Insert the document fragment into the DOM
+				placeholder.parentNode?.insertBefore(fragment, placeholder.nextSibling)
 
 				// Remove any remaining unused items
 				existingElementsByKey.forEach(item => {
