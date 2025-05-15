@@ -208,6 +208,7 @@ export default (options: ComponentOptions) => {
 
 			// Store nodes and expressions that need to be updated
 			const textBindings: Array<{ node: Text, expr: string, originalContent: string }> = []
+			const ifDirectivesToProcess: Array<{ element: Element, expr: string }> = []
 
 			// Traverse the DOM tree
 			let currentNode: Node | null
@@ -247,66 +248,68 @@ export default (options: ComponentOptions) => {
 
 				// Handle element nodes (can extend to handle attribute bindings, etc.)
 				else if (currentNode.nodeType === Node.ELEMENT_NODE) {
-					// Handle element attribute bindings, such as <img src="{{ imageUrl }}">
-					const element = currentNode as Element
+
+					const currentElementNode = currentNode as Element // Renamed to avoid conflict with outer 'element'
 
 					// Traverse all marco attributes
 
 					// Detect :attr="" bindings, such as :src="imageUrl"
-					Array.from(element.attributes).forEach(attr => {
+					Array.from(currentElementNode.attributes).forEach(attr => {
 						if (attr.name.startsWith(':')) {
 							const attrName = attr.name.substring(1) // Remove ':'
 							const expr = attr.value.trim()
 
 							// Remove the attribute, as it is not a standard HTML attribute
-							element.removeAttribute(attr.name)
+							currentElementNode.removeAttribute(attr.name)
 
 							// Set up attribute binding
-							this._setupAttributeBinding(element, attrName, expr, attr.value)
+							this._setupAttributeBinding(currentElementNode, attrName, expr, attr.value)
 						}
 					})
 
 					// Process @event bindings, such as @click="handleClick"
-					const eventBindings = Array.from(element.attributes).filter(attr => attr.name.startsWith('@'))
+					const eventBindings = Array.from(currentElementNode.attributes).filter(attr => attr.name.startsWith('@'))
 					eventBindings.forEach(attr => {
 						const eventName = attr.name.substring(1) // Remove '@'
 						const handlerValue = attr.value.trim()
 
 						// Remove the attribute, as it is not a standard HTML attribute
-						element.removeAttribute(attr.name)
+						currentElementNode.removeAttribute(attr.name)
 
 						// Handle different types of event handlers
 						if (handlerValue.includes('=>')) {
 							// Handle arrow function: @click="e => setState('count', count + 1)"
-							this._setupArrowFunctionHandler(element, eventName, handlerValue)
+							this._setupArrowFunctionHandler(currentElementNode, eventName, handlerValue)
 						} else if (handlerValue.includes('(') && handlerValue.includes(')')) {
 							// Handle function call: @click="increment(5)"
-							this._setupFunctionCallHandler(element, eventName, handlerValue)
+							this._setupFunctionCallHandler(currentElementNode, eventName, handlerValue)
 						} else if (typeof (this as any)[handlerValue] === 'function') {
 							// Handle method reference: @click="handleClick"
-							element.addEventListener(eventName, (this as any)[handlerValue].bind(this))
+							currentElementNode.addEventListener(eventName, (this as any)[handlerValue].bind(this))
 						} else {
 							// Handle simple expression: @click="count++" or @input="name = $event.target.value"
-							this._setupExpressionHandler(element, eventName, handlerValue)
+							this._setupExpressionHandler(currentElementNode, eventName, handlerValue)
 						}
 					})
 
 					// Process %-started marcos, such as %connect="stateName", %if="condition", %for="item in items"
-					const macroBindings = Array.from(element.attributes).filter(attr => attr.name.startsWith('%'))
+					const macroBindings = Array.from(currentElementNode.attributes).filter(attr => attr.name.startsWith('%'))
 					macroBindings.forEach(attr => {
 						const macroName = attr.name.substring(1) // Remove '%'
 						const expr = attr.value.trim()
 
 						// Remove the attribute, as it is not a standard HTML attribute
-						element.removeAttribute(attr.name)
+						currentElementNode.removeAttribute(attr.name)
 
 						// Handle different types of macros
 						if (macroName === 'connect') // Handle state connection: %connect="stateName"
-							this._setupTwoWayBinding(element, expr)
-						else if (macroName === 'if')
-							this._setupConditionRendering(element, expr)
+							this._setupTwoWayBinding(currentElementNode, expr)
+						else if (macroName === 'if') {
+							// Defer %if processing until after the initial traversal
+							ifDirectivesToProcess.push({ element: currentElementNode, expr })
+						}
 						else if (macroName === 'for')
-							this._setupAttributeBinding(element, 'data-laterano-for', expr, attr.value)
+							this._setupAttributeBinding(currentElementNode, 'data-laterano-for', expr, attr.value) // Placeholder, actual %for needs more complex logic
 						else
 							console.warn(`Unknown macro: %${macroName}`)
 					})
@@ -317,6 +320,11 @@ export default (options: ComponentOptions) => {
 
 			// Save text binding relationships for updates
 			this._textBindings = textBindings
+
+			// Process all collected %if directives after the main traversal
+			for (const { element: ifElement, expr } of ifDirectivesToProcess) {
+				this._setupConditionRendering(ifElement, expr)
+			}
 		}
 
 		// Handle two-way data binding (%connect marco)
