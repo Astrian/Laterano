@@ -125,7 +125,7 @@ export default (options: ComponentOptions) => {
 				shadow.appendChild(container)
 			}
 
-			this._processTemplateMarcos(rootElement)
+			this._processTemplateMacros(rootElement)
 		}
 
 		private _triggerDomUpdates(keyPath: string) {
@@ -191,12 +191,12 @@ export default (options: ComponentOptions) => {
 			}
 		}
 
-		private _processTemplateMarcos(element: Element) {
+		private _processTemplateMacros(element: Element) {
 			/*
 			 * We define that those prefix are available as macros:
-			 * - @ means event binding marco, such as @click="handleClick"
-			 * - : means dynamic attribute marco, such as :src="imageUrl"
-			 * - % means component controlling marco, such as %if="condition", %for="item in items" and %connect="stateName"
+			 * - @ means event binding macro, such as @click="handleClick"
+			 * - : means dynamic attribute macro, such as :src="imageUrl"
+			 * - % means component controlling macro, such as %if="condition", %for="item in items" and %connect="stateName"
 			 */
 
 			// Traverse all child nodes, including text nodes
@@ -251,7 +251,7 @@ export default (options: ComponentOptions) => {
 
 					const currentElementNode = currentNode as Element // Renamed to avoid conflict with outer 'element'
 
-					// Traverse all marco attributes
+					// Traverse all macro attributes
 
 					// Detect :attr="" bindings, such as :src="imageUrl"
 					Array.from(currentElementNode.attributes).forEach(attr => {
@@ -292,7 +292,7 @@ export default (options: ComponentOptions) => {
 						}
 					})
 
-					// Process %-started marcos, such as %connect="stateName", %if="condition", %for="item in items"
+					// Process %-started macros, such as %connect="stateName", %if="condition", %for="item in items"
 					const macroBindings = Array.from(currentElementNode.attributes).filter(attr => attr.name.startsWith('%'))
 					macroBindings.forEach(attr => {
 						const macroName = attr.name.substring(1) // Remove '%'
@@ -306,10 +306,11 @@ export default (options: ComponentOptions) => {
 							this._setupTwoWayBinding(currentElementNode, expr)
 						else if (macroName === 'if')
 							ifDirectivesToProcess.push({ element: currentElementNode, expr })
-						else if (macroName === 'for') {
-							// detect %key="keyName" attribute
+						else if (macroName === 'for') 
 							this._setupListRendering(currentElementNode, expr)
-						} else
+						else if (macroName === 'key')
+							return
+						else
 							console.warn(`Unknown macro: %${macroName}`)
 					})
 
@@ -326,7 +327,7 @@ export default (options: ComponentOptions) => {
 			}
 		}
 
-		// Handle two-way data binding (%connect marco)
+		// Handle two-way data binding (%connect macro)
 		private _setupTwoWayBinding(element: Element, expr: string) {
 			// Get the initial value
 			const value = this._getNestedState(expr)
@@ -356,7 +357,7 @@ export default (options: ComponentOptions) => {
 			}
 		}
 
-		// Handle condition rendering (%if marco)
+		// Handle condition rendering (%if macro)
 		private _setupConditionRendering(element: Element, expr: string) {
 
 			const placeholder = document.createComment(` %if: ${expr} `)
@@ -379,7 +380,6 @@ export default (options: ComponentOptions) => {
 			})
 		}
 
-		// Handle list rendering (%for marco)
 		// Handle list rendering (%for macro)
 private _setupListRendering(element: Element, expr: string) {
     // Parse the expression (e.g., "item in items" or "(item, index) in items")
@@ -450,7 +450,7 @@ private _setupListRendering(element: Element, expr: string) {
                 itemElement = template.cloneNode(true) as Element
                 
                 // Process template macros for this new element
-                this._processTemplateMarcos(itemElement)
+                this._processTemplateMacros(itemElement)
             }
             
             // Update item data
