@@ -412,14 +412,15 @@ export default (options: ComponentOptions) => {
 
 			// Create a function to update the list when the collection changes
 			const updateList = () => {
-				const collection = this._getNestedState(collectionExpr)
+				const collection = this._evaluateExpression(collectionExpr)
 				if (!collection || !Array.isArray(collection)) {
 					console.warn(`Collection "${collectionExpr}" is not an array or does not exist`)
 					return
 				}
 
 				// Get key attribute if available
-				const keyAttr = template.getAttribute('data-laterano-for')
+				const keyAttr = template.getAttribute('%key')
+				if (!keyAttr) console.warn(`%key attribute not found in the template, which is not a recommended practice.`)
 
 				// Store a map of existing items by key for reuse
 				const existingElementsByKey = new Map()
@@ -435,7 +436,7 @@ export default (options: ComponentOptions) => {
 				// Create or update items in the list
 				collection.forEach((item, index) => {
 					// Determine the key for this item
-					const key = keyAttr ? this._evaluateKeyExpression(keyAttr, item, index, itemVar) : index
+					const key = keyAttr ? this._evaluateExpressionWithItemContext(keyAttr ?? '', item, index, itemVar, indexVar ? indexVar : undefined) : index
 
 					// Check if we can reuse an existing element
 					const existingItem = existingElementsByKey.get(key)
@@ -448,9 +449,6 @@ export default (options: ComponentOptions) => {
 					} else {
 						// Create a new element
 						itemElement = template.cloneNode(true) as Element
-
-						// Process template macros for this new element
-						this._processTemplateMacros(itemElement)
 					}
 
 					// Update item data
@@ -461,14 +459,17 @@ export default (options: ComponentOptions) => {
 						index
 					})
 
-					// Create rendering context for this item
-					const itemContext = { [itemVar]: item }
+					// Create item context for this item
+					const itemContext = {
+						[itemVar]: item
+					}
 					if (indexVar) {
 						itemContext[indexVar] = index
 					}
 
 					// Apply the item context to the element
-					this._applyItemContext(itemElement, itemContext)
+					// We will use recursive processing here!
+					this._processElementWithItemContext(itemElement, itemContext)
 
 					// Insert the element at the correct position in the DOM
 					placeholder.parentNode?.insertBefore(itemElement, placeholder.nextSibling)
@@ -499,19 +500,200 @@ export default (options: ComponentOptions) => {
 			}
 		}
 
-		// Helper method to evaluate key expressions for list items
-		private _evaluateKeyExpression(keyExpr: string, itemData: any, index: number, itemVar: string): any {
-			try {
-				// If keyExpr is directly the item property, return it
-				if (keyExpr === itemVar) {
-					return itemData
+		// Recursively process the element and its children, applying the item context
+		private _processElementWithItemContext(element: Element, itemContext: Record<string, any>) {
+			// 1. Store the item context of the element so that subsequent updates can find it
+			(element as any)._itemContext = itemContext
+
+			// 2. Process bindings in text nodes
+			const processTextNodes = (node: Node) => {
+				if (node.nodeType === Node.TEXT_NODE) {
+					const textContent = node.textContent || ''
+					if (textContent.includes('{{')) {
+						const textNode = node as Text
+						const updatedContent = textContent.replace(/\{\{\s*([^}]+)\s*\}\}/g, (match, expr) => {
+							const value = this._evaluateExpressionWithItemContext(expr.trim(), itemContext)
+							return value !== undefined ? String(value) : ''
+						})
+						textNode.textContent = updatedContent
+					}
+				}
+			}
+
+			// Process the text nodes of the element itself
+			Array.from(element.childNodes).forEach(node => {
+				if (node.nodeType === Node.TEXT_NODE) {
+					processTextNodes(node)
+				}
+			})
+
+			// 3. Process attribute bindings (:attr)
+			Array.from(element.attributes).forEach(attr => {
+				if (attr.name.startsWith(':')) {
+					const attrName = attr.name.substring(1)
+					const expr = attr.value.trim()
+					const value = this._evaluateExpressionWithItemContext(expr, itemContext)
+
+					if (value !== undefined) {
+						element.setAttribute(attrName, String(value))
+					}
+
+					// Remove the original binding attribute (execute only for cloned templates once)
+					element.removeAttribute(attr.name)
+				}
+			})
+
+			// 4. Process event bindings (@event)
+			Array.from(element.attributes).forEach(attr => {
+				if (attr.name.startsWith('@')) {
+					const eventName = attr.name.substring(1)
+					const handlerValue = attr.value.trim()
+
+					// Remove the original binding attribute
+					element.removeAttribute(attr.name)
+
+					// Add event listener
+					element.addEventListener(eventName, (event: Event) => {
+						try {
+							// Create a merged context
+							const mergedContext = {
+								...this._createHandlerContext(event, element),
+								...itemContext,
+								$event: event,
+								$el: element
+							}
+
+							// Execute the expression
+							const fnStr = `with(this) { ${handlerValue} }`
+							new Function(fnStr).call(mergedContext)
+						} catch (err) {
+							console.error(`Error executing event handler with item context: ${handlerValue}`, err)
+						}
+					})
+				}
+			})
+
+			// 5. Process conditional rendering (%if)
+			let isConditional = false
+			let shouldDisplay = true
+
+			Array.from(element.attributes).forEach(attr => {
+				if (attr.name === '%if') {
+					isConditional = true
+					const expr = attr.value.trim()
+
+					// Remove the original binding attribute
+					element.removeAttribute(attr.name)
+
+					// Calculate the condition
+					const result = this._evaluateExpressionWithItemContext(expr, itemContext)
+					shouldDisplay = Boolean(result)
+
+					// Apply the condition (in the list item context, we use display style to simplify)
+					if (!shouldDisplay)
+						(element as HTMLElement).style.display = 'none'
+				}
+			})
+
+			// If the condition evaluates to false, skip further processing of this element
+			if (isConditional && !shouldDisplay) {
+				return
+			}
+
+			// 6. Process nested list rendering (%for)
+			let hasForDirective = false
+
+			Array.from(element.attributes).forEach(attr => {
+				if (attr.name === '%for') {
+					hasForDirective = true
+					const forExpr = attr.value.trim()
+
+					// Remove the original binding attribute
+					element.removeAttribute(attr.name)
+
+					// Here we will create a new nested list
+					// Note: We need to evaluate the collection expression through the current item context here
+					this._setupNestedListRendering(element, forExpr, itemContext)
+				}
+			})
+
+			// If this element is a list element, skip child element processing (they will be processed by the list processor)
+			if (hasForDirective) {
+				return
+			}
+
+			// 7. Recursively process all child elements
+			Array.from(element.children).forEach(child => {
+				this._processElementWithItemContext(child, itemContext)
+			})
+		}
+
+		// Set up nested list rendering
+		private _setupNestedListRendering(element: Element, expr: string, parentItemContext: Record<string, any>) {
+			// Similar to _setupListRendering, but applies to nested situations
+			// Parse the expression (e.g., "subItem in item.subItems")
+			const match = expr.match(/(?:\(([^,]+),\s*([^)]+)\)|([^,\s]+))\s+in\s+(.+)/)
+			if (!match) {
+				console.error(`Invalid nested %for expression: ${expr}`)
+				return
+			}
+
+			// Extract the item variable name, index variable name (optional), and collection expression
+			const itemVar = match[3] || match[1]
+			const indexVar = match[2] || null
+			const collectionExpr = match[4].trim()
+
+			// Evaluate the collection expression, using the parent item context
+			const collection = this._evaluateExpressionWithItemContext(collectionExpr, parentItemContext)
+
+			if (!collection || !Array.isArray(collection)) {
+				console.warn(`Nested collection "${collectionExpr}" is not an array or does not exist`)
+				return
+			}
+
+			// Create a placeholder comment
+			const placeholder = document.createComment(` %for: ${expr} `)
+			element.parentNode?.insertBefore(placeholder, element)
+
+			// Remove the original template element from the DOM
+			const template = element.cloneNode(true) as Element
+			element.parentNode?.removeChild(element)
+
+			// Create an element for each item
+			collection.forEach((item, index) => {
+				const itemElement = template.cloneNode(true) as Element
+
+				// Create a nested item context, merging the parent context
+				const nestedItemContext = {
+					...parentItemContext,
+					[itemVar]: item
 				}
 
-				// If keyExpr is a property path like "item.id", extract it
-				if (keyExpr.startsWith(itemVar + '.')) {
-					const propertyPath = keyExpr.substring(itemVar.length + 1)
+				if (indexVar) {
+					nestedItemContext[indexVar] = index
+				}
+
+				// Recursively process this item and its children
+				this._processElementWithItemContext(itemElement, nestedItemContext)
+
+				// Add the element to the DOM
+				placeholder.parentNode?.insertBefore(itemElement, placeholder.nextSibling)
+			})
+		}
+
+		// Evaluate expressions using the item context
+		private _evaluateExpressionWithItemContext(expression: string, itemContext: Record<string, any>, index?: number, itemVar?: string, indexVar?: string): any {
+			try {
+				// Check if the expression directly references the item variable
+				if (itemVar && expression === itemVar) {
+					return itemContext[itemVar]
+				}
+
+				// Check if the expression is an item property path
+				if (itemVar && expression.startsWith(itemVar + '.')) {
+					const propertyPath = expression.substring(itemVar.length + 1)
 					const parts = propertyPath.split('.')
-					let value = itemData
+					let value = itemContext[itemVar]
 
 					for (const part of parts) {
 						if (value === undefined || value === null) {
@@ -523,70 +705,25 @@ export default (options: ComponentOptions) => {
 					return value
 				}
 
-				// Otherwise, evaluate as an expression
-				const func = new Function(itemVar, 'index', `return ${keyExpr}`)
-				return func(itemData, index)
+				// Check if the expression directly references the index variable
+				if (indexVar && expression === indexVar) {
+					return index
+				}
+
+				// Create a merged context (component state + item context)
+				const mergedContext = { ...this._states, ...itemContext }
+
+				// Create a function to evaluate the expression
+				const contextKeys = Object.keys(mergedContext)
+				const contextValues = Object.values(mergedContext)
+
+				// Use the with statement to allow the expression to access all properties in the context
+				const func = new Function(...contextKeys, `return ${expression}`)
+				return func(...contextValues)
 			} catch (error) {
-				console.error(`Error evaluating key expression: ${keyExpr}`, error)
-				return index // Fallback to index as key
+				console.error(`Error evaluating expression with item context: ${expression}`, error)
+				return undefined
 			}
-		}
-
-		// Helper method to apply item context to elements
-		private _applyItemContext(element: Element, itemContext: Record<string, any>) {
-			// Store the item context on the element
-			(element as any)._itemContext = itemContext
-
-			// Update text nodes with handlebars expressions
-			const updateTextNodes = (node: Node) => {
-				if (node.nodeType === Node.TEXT_NODE) {
-					const textContent = node.textContent || ''
-
-					if (textContent.includes('{{')) {
-						const textNode = node as Text
-						const originalContent = textContent
-
-						// Replace expressions with values from item context
-						let newContent = originalContent.replace(/\{\{\s*([^}]+)\s*\}\}/g, (match, expr) => {
-							// Check if expression references item context
-							const contextVarNames = Object.keys(itemContext)
-							const usesContext = contextVarNames.some(varName => expr.includes(varName))
-
-							if (usesContext) {
-								try {
-									// Create a function that evaluates the expression with the item context
-									const contextValues = Object.values(itemContext)
-									const func = new Function(...contextVarNames, `return ${expr.trim()}`)
-									const result = func(...contextValues)
-									return result !== undefined ? String(result) : ''
-								} catch (error) {
-									console.error(`Error evaluating expression in list item: ${expr}`, error)
-									return ''
-								}
-							} else {
-								// Use the regular state value if not from item context
-								const value = this._getNestedState(expr.trim())
-								return value !== undefined ? String(value) : ''
-							}
-						})
-
-						textNode.textContent = newContent
-					}
-				}
-
-				// Recursively process child nodes
-				const childNodes = node.childNodes
-				for (let i = 0; i < childNodes.length; i++) {
-					updateTextNodes(childNodes[i])
-				}
-			}
-
-			// Update text nodes
-			updateTextNodes(element)
-
-			// Also handle event handlers and other bindings if needed
-			// This is more complex and would require extending other methods
-			// to be aware of the item context
 		}
 
 		private _evaluateIfCondition(element: Element, condition: string) {
