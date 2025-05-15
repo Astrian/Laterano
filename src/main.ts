@@ -466,9 +466,17 @@ export default (options: ComponentOptions) => {
 					const itemContext = {
 						[itemVar]: item
 					}
-					if (indexVar) {
+					if (indexVar)
 						itemContext[indexVar] = index
+
+					// insert %key attribute, which dynamically bind the key
+					if (keyAttr) {
+						const keyValue = this._evaluateExpressionWithItemContext(keyAttr, itemContext)
+						itemElement.setAttribute('data-laterano-key', String(keyValue))
 					}
+
+					// remove original %key attribute
+					itemElement.removeAttribute('%key')
 
 					// Apply the item context to the element
 					// We will use recursive processing here!
