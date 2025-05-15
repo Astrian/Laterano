@@ -27,6 +27,11 @@ export default (options: ComponentOptions) => {
 		private _statesListeners: Record<string, Function> = {}
 		private _textBindings: Array<{ node: Text, expr: string, originalContent: string }> = []
 		private _attributeBindings: Array<{ element: Element, attrName: string, expr: string, template: string }> = []
+		private _conditionalElements: Map<Element, {
+			expr: string,
+			placeholder: Comment,
+			isPresent: boolean
+		}> = new Map()
 
 		constructor() {
 			super()
@@ -114,7 +119,7 @@ export default (options: ComponentOptions) => {
 				shadow.appendChild(container)
 			}
 
-			this._processTemplateBindings(rootElement)
+			this._processTemplateMarcos(rootElement)
 		}
 
 		private _triggerDomUpdates(keyPath: string) {
@@ -180,7 +185,14 @@ export default (options: ComponentOptions) => {
 			}
 		}
 
-		private _processTemplateBindings(element: Element) {
+		private _processTemplateMarcos(element: Element) {
+			/*
+			 * We define that those prefix are available as macros:
+			 * - @ means event binding marco, such as @click="handleClick"
+			 * - : means dynamic attribute marco, such as :src="imageUrl"
+			 * - % means component controlling marco, such as %if="condition", %for="item in items" and %connect="stateName"
+			 */
+
 			// Traverse all child nodes, including text nodes
 			const walker = document.createTreeWalker(
 				element,
@@ -232,7 +244,8 @@ export default (options: ComponentOptions) => {
 					// Handle element attribute bindings, such as <img src="{{ imageUrl }}">
 					const element = currentNode as Element
 
-					// Traverse all attributes
+					// Traverse all marco attributes
+
 					// Detect :attr="" bindings, such as :src="imageUrl"
 					Array.from(element.attributes).forEach(attr => {
 						if (attr.name.startsWith(':')) {
@@ -272,11 +285,140 @@ export default (options: ComponentOptions) => {
 						}
 					})
 
+					// Process %-started marcos, such as %connect="stateName", %if="condition", %for="item in items"
+					const macroBindings = Array.from(element.attributes).filter(attr => attr.name.startsWith('%'))
+					macroBindings.forEach(attr => {
+						const macroName = attr.name.substring(1) // Remove '%'
+						const expr = attr.value.trim()
+
+						// Remove the attribute, as it is not a standard HTML attribute
+						element.removeAttribute(attr.name)
+
+						// Handle different types of macros
+						if (macroName === 'connect') // Handle state connection: %connect="stateName"
+							this._setupTwoWayBinding(element, expr)
+						else if (macroName === 'if')
+							this._setupConditionRendering(element, expr)
+						else if (macroName === 'for')
+							this._setupAttributeBinding(element, 'data-laterano-for', expr, attr.value)
+						else
+							console.warn(`Unknown macro: %${macroName}`)
+					})
+
+
 				}
 			}
 
 			// Save text binding relationships for updates
 			this._textBindings = textBindings
+		}
+
+		// Handle two-way data binding (%connect marco)
+		private _setupTwoWayBinding(element: Element, expr: string) {
+			console.log("setting up two-way binding for", expr)
+
+			// Get the initial value
+			const value = this._getNestedState(expr)
+
+			// Set the initial value
+			if (value !== undefined)
+				element.setAttribute('data-laterano-connect', String(value))
+			else
+				console.error(`State \`${expr}\` not found in the component state. Although Laterano will try to work with it, it may has potentially unexpected behavior.`)
+
+			// Add event listener for input events
+			element.addEventListener('input', (event: Event) => {
+				const target = event.target as HTMLInputElement
+				const newValue = target.value
+
+				// Update the state
+				this.setState(expr, newValue)
+			})
+
+			// Add event listener for state changes
+			this._statesListeners[expr] = (newValue: any) => {
+				if (element instanceof HTMLInputElement) {
+					element.value = newValue
+				} else {
+					element.setAttribute('data-laterano-connect', String(newValue))
+				}
+			}
+		}
+
+		// Handle condition rendering (%if marco)
+		private _setupConditionRendering(element: Element, expr: string) {
+			console.log("setting up condition rendering for", expr)
+
+			const placeholder = document.createComment(` %if: ${expr} `)
+			element.parentNode?.insertBefore(placeholder, element)
+
+			this._conditionalElements.set(element, {
+				expr,
+				placeholder,
+				isPresent: false
+			})
+
+			this._evaluateIfCondition(element, expr)
+
+			const statePaths = this._extractStatePathsFromExpression(expr)
+			statePaths.forEach(path => {
+				if (!this._stateToElementsMap[path]) {
+					this._stateToElementsMap[path] = new Set()
+				}
+				this._stateToElementsMap[path].add(element as HTMLElement)
+			})
+		}
+
+		private _evaluateIfCondition(element: Element, condition: string) {
+			const info = this._conditionalElements.get(element)
+			if (!info) return
+
+			// Evaluate the condition
+			const result = this._evaluateExpression(condition)
+			const shouldShow = Boolean(result)
+			if (shouldShow) console.log(`Condition "${condition}" is true, showing element.`)
+			else console.log(`Condition "${condition}" is false, hiding element.`)
+
+			if (info.isPresent) 
+
+			if (shouldShow !== info.isPresent) {
+				if (shouldShow) // Insert the element back into the DOM
+					info.placeholder.parentNode?.insertBefore(element, info.placeholder.nextSibling)
+				else // Remove the element from the DOM
+					element.parentNode?.removeChild(element)
+
+				// Update the state
+				info.isPresent = shouldShow
+				this._conditionalElements.set(element, info)
+			}
+		}
+
+		private _evaluateExpression(expression: string): any {
+			try {
+				// get the state keys and values
+				if (this._states[expression] !== undefined)
+					return this._states[expression]
+
+				// execute the expression
+				const stateKeys = Object.keys(this._states)
+				const stateValues = Object.values(this._states)
+
+				const func = new Function(...stateKeys, `return ${expression}`)
+				const execRes = func(...stateValues)
+				if (typeof execRes !== 'boolean')
+					throw new Error(`The expression "${expression}" must return a boolean value.`)
+				return execRes
+			} catch (error) {
+				console.error(`Error evaluating expression: ${expression}`, error)
+				return undefined
+			}
+		}
+
+		private _extractStatePathsFromExpression(expression: string): string[] {
+			const matches = expression.match(/[a-zA-Z_$][a-zA-Z0-9_$]*/g) || []
+			return matches.filter(match =>
+				!['true', 'false', 'null', 'undefined', 'this'].includes(match)
+			)
 		}
 
 		// Handle arrow function
