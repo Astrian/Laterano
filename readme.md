@@ -17,7 +17,7 @@
 3. Define your component and use it inside your HTML
 4. Done!
 
-Here is a sample code:
+Here is a sample code for a simple to-do app:
 
 ```ts
 import defineComponent from 'laterano'
