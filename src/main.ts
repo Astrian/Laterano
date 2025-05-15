@@ -315,8 +315,6 @@ export default (options: ComponentOptions) => {
 
 		// Handle two-way data binding (%connect marco)
 		private _setupTwoWayBinding(element: Element, expr: string) {
-			console.log("setting up two-way binding for", expr)
-
 			// Get the initial value
 			const value = this._getNestedState(expr)
 
