@@ -1,6 +1,6 @@
 # Laterano
 
-> Lateranians love sweets, and it is said that a qualified Lateran knows how to make at least twenty kinds of desserts. 
+> Lateranians love sweets, and it is said that a qualified Lateranian knows how to make at least twenty kinds of desserts. 
 > 
 > Lateranians have even created the unique dessert “Cactus Tart,” which is loved by the Pope.
 > 
