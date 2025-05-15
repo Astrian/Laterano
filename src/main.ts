@@ -57,10 +57,16 @@ export default (options: ComponentOptions) => {
 					if (this._statesListeners[keyPath])
 						this._statesListeners[keyPath](value)
 
+					// trigger %if macros
+					if (this._conditionalElements.size > 0)
+						this._conditionalElements.forEach((info, element) => {
+							if (info.expr.includes(keyPath))
+								this._evaluateIfCondition(element, info.expr)
+						})
+
 					// trigger state update events
-					if (statesListeners && statesListeners[keyPath]) {
+					if (statesListeners && statesListeners[keyPath])
 						statesListeners[keyPath](value)
-					}
 
 					return true
 				},
@@ -345,7 +351,6 @@ export default (options: ComponentOptions) => {
 
 		// Handle condition rendering (%if marco)
 		private _setupConditionRendering(element: Element, expr: string) {
-			console.log("setting up condition rendering for", expr)
 
 			const placeholder = document.createComment(` %if: ${expr} `)
 			element.parentNode?.insertBefore(placeholder, element)
@@ -353,7 +358,7 @@ export default (options: ComponentOptions) => {
 			this._conditionalElements.set(element, {
 				expr,
 				placeholder,
-				isPresent: false
+				isPresent: true
 			})
 
 			this._evaluateIfCondition(element, expr)
@@ -374,10 +379,6 @@ export default (options: ComponentOptions) => {
 			// Evaluate the condition
 			const result = this._evaluateExpression(condition)
 			const shouldShow = Boolean(result)
-			if (shouldShow) console.log(`Condition "${condition}" is true, showing element.`)
-			else console.log(`Condition "${condition}" is false, hiding element.`)
-
-			if (info.isPresent) 
 
 			if (shouldShow !== info.isPresent) {
 				if (shouldShow) // Insert the element back into the DOM
