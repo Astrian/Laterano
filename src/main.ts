@@ -237,9 +237,9 @@ export default (options: ComponentOptions) => {
 								this._updateTextNode(textNode, expr, originalContent)
 
 								// Add dependency relationship for this state path
-								if (!this._stateToElementsMap[expr]) {
+								if (!this._stateToElementsMap[expr])
 									this._stateToElementsMap[expr] = new Set()
-								}
+
 								this._stateToElementsMap[expr].add(textNode as unknown as HTMLElement)
 							})
 						}
