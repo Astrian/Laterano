@@ -308,13 +308,8 @@ export default (options: ComponentOptions) => {
 							ifDirectivesToProcess.push({ element: currentElementNode, expr })
 						else if (macroName === 'for') {
 							// detect %key="keyName" attribute
-							const keyAttr = currentElementNode.getAttribute('%key')
-							if (!keyAttr)
-								return console.error(`%for macro requires %key attribute: %for="${expr}"`)
-							this._setupListRendering(currentElementNode, expr, keyAttr)
-						} else if (macroName === 'key') // Ignore %key macro, as it is handled in %for
-							return
-						else
+							this._setupListRendering(currentElementNode, expr)
+						} else
 							console.warn(`Unknown macro: %${macroName}`)
 					})
 
@@ -384,214 +379,215 @@ export default (options: ComponentOptions) => {
 			})
 		}
 
+		// Handle list rendering (%for marco)
 		// Handle list rendering (%for macro)
-		private _setupListRendering(element: Element, expr: string, keyAttr: string) {
-			// Parse the expression (e.g., "item in items" or "(item, index) in items")
-			const match = expr.match(/(?:\(([^,]+),\s*([^)]+)\)|([^,\s]+))\s+in\s+(.+)/)
-			if (!match) {
-				console.error(`Invalid %for expression: ${expr}`)
-				return
-			}
+private _setupListRendering(element: Element, expr: string) {
+    // Parse the expression (e.g., "item in items" or "(item, index) in items")
+    const match = expr.match(/(?:\(([^,]+),\s*([^)]+)\)|([^,\s]+))\s+in\s+(.+)/)
+    if (!match) {
+        console.error(`Invalid %for expression: ${expr}`)
+        return
+    }
 
-			// Extract the item variable name, index variable name (optional), and collection expression
-			const itemVar = match[3] || match[1]
-			const indexVar = match[2] || null
-			const collectionExpr = match[4].trim()
+    // Extract the item variable name, index variable name (optional), and collection expression
+    const itemVar = match[3] || match[1]
+    const indexVar = match[2] || null
+    const collectionExpr = match[4].trim()
 
-			// Create a placeholder comment to mark where the list should be rendered
-			const placeholder = document.createComment(` %for: ${expr} `)
-			element.parentNode?.insertBefore(placeholder, element)
+    // Create a placeholder comment to mark where the list should be rendered
+    const placeholder = document.createComment(` %for: ${expr} `)
+    element.parentNode?.insertBefore(placeholder, element)
+    
+    // Remove the original template element from the DOM
+    const template = element.cloneNode(true) as Element
+    element.parentNode?.removeChild(element)
+    
+    // Store current rendered items
+    const renderedItems: Array<{
+        element: Element,
+        key: any,
+        data: any,
+        index: number
+    }> = []
+    
+    // Create a function to update the list when the collection changes
+    const updateList = () => {
+        const collection = this._getNestedState(collectionExpr)
+        if (!collection || !Array.isArray(collection)) {
+            console.warn(`Collection "${collectionExpr}" is not an array or does not exist`)
+            return
+        }
+        
+        // Get key attribute if available
+        const keyAttr = template.getAttribute('data-laterano-for')
+        
+        // Store a map of existing items by key for reuse
+        const existingElementsByKey = new Map()
+        renderedItems.forEach(item => {
+            if (item.key !== undefined) {
+                existingElementsByKey.set(item.key, item)
+            }
+        })
+        
+        // Clear rendered items
+        renderedItems.length = 0
+        
+        // Create or update items in the list
+        collection.forEach((item, index) => {
+            // Determine the key for this item
+            const key = keyAttr ? this._evaluateKeyExpression(keyAttr, item, index, itemVar) : index
+            
+            // Check if we can reuse an existing element
+            const existingItem = existingElementsByKey.get(key)
+            let itemElement: Element
+            
+            if (existingItem) {
+                // Reuse existing element
+                itemElement = existingItem.element
+                existingElementsByKey.delete(key) // Remove from map so we know it's been used
+            } else {
+                // Create a new element
+                itemElement = template.cloneNode(true) as Element
+                
+                // Process template macros for this new element
+                this._processTemplateMarcos(itemElement)
+            }
+            
+            // Update item data
+            renderedItems.push({
+                element: itemElement,
+                key,
+                data: item,
+                index
+            })
+            
+            // Create rendering context for this item
+            const itemContext = { [itemVar]: item }
+            if (indexVar) {
+                itemContext[indexVar] = index
+            }
+            
+            // Apply the item context to the element
+            this._applyItemContext(itemElement, itemContext)
+            
+            // Insert the element at the correct position in the DOM
+            placeholder.parentNode?.insertBefore(itemElement, placeholder.nextSibling)
+        })
+        
+        // Remove any remaining unused items
+        existingElementsByKey.forEach(item => {
+            if (item.element.parentNode) {
+                item.element.parentNode.removeChild(item.element)
+            }
+        })
+    }
+    
+    // Initial render
+    updateList()
+    
+    // Set up state dependency for collection changes
+    if (!this._stateToElementsMap[collectionExpr]) {
+        this._stateToElementsMap[collectionExpr] = new Set()
+    }
+    // Using a unique identifier for this list rendering instance
+    const listVirtualElement = document.createElement('div')
+    this._stateToElementsMap[collectionExpr].add(listVirtualElement as HTMLElement)
+    
+    // Add listener for state changes
+    this._statesListeners[collectionExpr] = () => {
+        updateList()
+    }
+}
 
-			// Remove the original template element from the DOM
-			const template = element.cloneNode(true) as Element
-			element.parentNode?.removeChild(element)
+// Helper method to evaluate key expressions for list items
+private _evaluateKeyExpression(keyExpr: string, itemData: any, index: number, itemVar: string): any {
+    try {
+        // If keyExpr is directly the item property, return it
+        if (keyExpr === itemVar) {
+            return itemData
+        }
+        
+        // If keyExpr is a property path like "item.id", extract it
+        if (keyExpr.startsWith(itemVar + '.')) {
+            const propertyPath = keyExpr.substring(itemVar.length + 1)
+            const parts = propertyPath.split('.')
+            let value = itemData
+            
+            for (const part of parts) {
+                if (value === undefined || value === null) {
+                    return undefined
+                }
+                value = value[part]
+            }
+            
+            return value
+        }
+        
+        // Otherwise, evaluate as an expression
+        const func = new Function(itemVar, 'index', `return ${keyExpr}`)
+        return func(itemData, index)
+    } catch (error) {
+        console.error(`Error evaluating key expression: ${keyExpr}`, error)
+        return index // Fallback to index as key
+    }
+}
 
-			// Store current rendered items
-			const renderedItems: Array<{
-				element: Element,
-				key: any,
-				data: any,
-				index: number
-			}> = []
-
-			// Create a function to update the list when the collection changes
-			const updateList = () => {
-				const collection = this._getNestedState(collectionExpr)
-				if (!collection || !Array.isArray(collection)) {
-					console.warn(`Collection "${collectionExpr}" is not an array or does not exist`)
-					return
-				}
-
-				// Get key attribute if available
-				const keyAttr = template.getAttribute('data-laterano-for')
-
-				// Store a map of existing items by key for reuse
-				const existingElementsByKey = new Map()
-				renderedItems.forEach(item => {
-					if (item.key !== undefined) {
-						existingElementsByKey.set(item.key, item)
-					}
-				})
-
-				// Clear rendered items
-				renderedItems.length = 0
-
-				// Create or update items in the list
-				collection.forEach((item, index) => {
-					// Determine the key for this item
-					const key = keyAttr ? this._evaluateKeyExpression(keyAttr, item, index, itemVar) : index
-
-					// Check if we can reuse an existing element
-					const existingItem = existingElementsByKey.get(key)
-					let itemElement: Element
-
-					if (existingItem) {
-						// Reuse existing element
-						itemElement = existingItem.element
-						existingElementsByKey.delete(key) // Remove from map so we know it's been used
-					} else {
-						// Create a new element
-						itemElement = template.cloneNode(true) as Element
-
-						// Process template macros for this new element
-						this._processTemplateMarcos(itemElement)
-					}
-
-					// Update item data
-					renderedItems.push({
-						element: itemElement,
-						key,
-						data: item,
-						index
-					})
-
-					// Create rendering context for this item
-					const itemContext = { [itemVar]: item }
-					if (indexVar) {
-						itemContext[indexVar] = index
-					}
-
-					// Apply the item context to the element
-					this._applyItemContext(itemElement, itemContext)
-
-					// Insert the element at the correct position in the DOM
-					placeholder.parentNode?.insertBefore(itemElement, placeholder.nextSibling)
-				})
-
-				// Remove any remaining unused items
-				existingElementsByKey.forEach(item => {
-					if (item.element.parentNode) {
-						item.element.parentNode.removeChild(item.element)
-					}
-				})
-			}
-
-			// Initial render
-			updateList()
-
-			// Set up state dependency for collection changes
-			if (!this._stateToElementsMap[collectionExpr]) {
-				this._stateToElementsMap[collectionExpr] = new Set()
-			}
-			// Using a unique identifier for this list rendering instance
-			const listVirtualElement = document.createElement('div')
-			this._stateToElementsMap[collectionExpr].add(listVirtualElement as HTMLElement)
-
-			// Add listener for state changes
-			this._statesListeners[collectionExpr] = () => {
-				updateList()
-			}
-		}
-
-		// Helper method to evaluate key expressions for list items
-		private _evaluateKeyExpression(keyExpr: string, itemData: any, index: number, itemVar: string): any {
-			try {
-				// If keyExpr is directly the item property, return it
-				if (keyExpr === itemVar) {
-					return itemData
-				}
-
-				// If keyExpr is a property path like "item.id", extract it
-				if (keyExpr.startsWith(itemVar + '.')) {
-					const propertyPath = keyExpr.substring(itemVar.length + 1)
-					const parts = propertyPath.split('.')
-					let value = itemData
-
-					for (const part of parts) {
-						if (value === undefined || value === null) {
-							return undefined
-						}
-						value = value[part]
-					}
-
-					return value
-				}
-
-				// Otherwise, evaluate as an expression
-				const func = new Function(itemVar, 'index', `return ${keyExpr}`)
-				return func(itemData, index)
-			} catch (error) {
-				console.error(`Error evaluating key expression: ${keyExpr}`, error)
-				return index // Fallback to index as key
-			}
-		}
-
-		// Helper method to apply item context to elements
-		private _applyItemContext(element: Element, itemContext: Record<string, any>) {
-			// Store the item context on the element
-			(element as any)._itemContext = itemContext
-
-			// Update text nodes with handlebars expressions
-			const updateTextNodes = (node: Node) => {
-				if (node.nodeType === Node.TEXT_NODE) {
-					const textContent = node.textContent || ''
-
-					if (textContent.includes('{{')) {
-						const textNode = node as Text
-						const originalContent = textContent
-
-						// Replace expressions with values from item context
-						let newContent = originalContent.replace(/\{\{\s*([^}]+)\s*\}\}/g, (match, expr) => {
-							// Check if expression references item context
-							const contextVarNames = Object.keys(itemContext)
-							const usesContext = contextVarNames.some(varName => expr.includes(varName))
-
-							if (usesContext) {
-								try {
-									// Create a function that evaluates the expression with the item context
-									const contextValues = Object.values(itemContext)
-									const func = new Function(...contextVarNames, `return ${expr.trim()}`)
-									const result = func(...contextValues)
-									return result !== undefined ? String(result) : ''
-								} catch (error) {
-									console.error(`Error evaluating expression in list item: ${expr}`, error)
-									return ''
-								}
-							} else {
-								// Use the regular state value if not from item context
-								const value = this._getNestedState(expr.trim())
-								return value !== undefined ? String(value) : ''
-							}
-						})
-
-						textNode.textContent = newContent
-					}
-				}
-
-				// Recursively process child nodes
-				const childNodes = node.childNodes
-				for (let i = 0; i < childNodes.length; i++) {
-					updateTextNodes(childNodes[i])
-				}
-			}
-
-			// Update text nodes
-			updateTextNodes(element)
-
-			// Also handle event handlers and other bindings if needed
-			// This is more complex and would require extending other methods
-			// to be aware of the item context
-		}
+// Helper method to apply item context to elements
+private _applyItemContext(element: Element, itemContext: Record<string, any>) {
+    // Store the item context on the element
+    (element as any)._itemContext = itemContext
+    
+    // Update text nodes with handlebars expressions
+    const updateTextNodes = (node: Node) => {
+        if (node.nodeType === Node.TEXT_NODE) {
+            const textContent = node.textContent || ''
+            
+            if (textContent.includes('{{')) {
+                const textNode = node as Text
+                const originalContent = textContent
+                
+                // Replace expressions with values from item context
+                let newContent = originalContent.replace(/\{\{\s*([^}]+)\s*\}\}/g, (match, expr) => {
+                    // Check if expression references item context
+                    const contextVarNames = Object.keys(itemContext)
+                    const usesContext = contextVarNames.some(varName => expr.includes(varName))
+                    
+                    if (usesContext) {
+                        try {
+                            // Create a function that evaluates the expression with the item context
+                            const contextValues = Object.values(itemContext)
+                            const func = new Function(...contextVarNames, `return ${expr.trim()}`)
+                            const result = func(...contextValues)
+                            return result !== undefined ? String(result) : ''
+                        } catch (error) {
+                            console.error(`Error evaluating expression in list item: ${expr}`, error)
+                            return ''
+                        }
+                    } else {
+                        // Use the regular state value if not from item context
+                        const value = this._getNestedState(expr.trim())
+                        return value !== undefined ? String(value) : ''
+                    }
+                })
+                
+                textNode.textContent = newContent
+            }
+        }
+        
+        // Recursively process child nodes
+        const childNodes = node.childNodes
+        for (let i = 0; i < childNodes.length; i++) {
+            updateTextNodes(childNodes[i])
+        }
+    }
+    
+    // Update text nodes
+    updateTextNodes(element)
+    
+    // Also handle event handlers and other bindings if needed
+    // This is more complex and would require extending other methods
+    // to be aware of the item context
+}
 
 		private _evaluateIfCondition(element: Element, condition: string) {
 			const info = this._conditionalElements.get(element)
