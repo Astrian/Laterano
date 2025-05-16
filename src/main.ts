@@ -1,6 +1,6 @@
 interface CustomElement extends HTMLElement {
-	setState(key_path: string, value: any): void
-	getState(key_path: string): any
+	setState(key_path: string, value: unknown): void
+	getState(key_path: string): unknown
 }
 
 interface ComponentOptions {
@@ -14,9 +14,9 @@ interface ComponentOptions {
 		oldValue: string,
 		newValue: string,
 	) => void
-	states?: Record<string, any>
-	statesListeners?: { [key: string]: (value: any) => void }
-	funcs?: { [key: string]: (...args: any[]) => void }
+	states?: Record<string, unknown>
+	statesListeners?: { [key: string]: (value: unknown) => void }
+	funcs?: { [key: string]: (...args: unknown[]) => void }
 }
 
 export default (options: ComponentOptions) => {
@@ -35,10 +35,10 @@ export default (options: ComponentOptions) => {
 	componentRegistry.set(tag, options)
 
 	class CustomElementImpl extends HTMLElement {
-		private _states: Record<string, any> = {}
+		private _states: Record<string, unknown> = {}
 		private _stateToElementsMap: Record<string, Set<HTMLElement>> = {}
 		private _currentRenderingElement: HTMLElement | null = null
-		private _statesListeners: Record<string, (...args: any[]) => void> = {}
+		private _statesListeners: Record<string, (...args: unknown[]) => void> = {}
 		private _textBindings: Array<{
 			node: Text
 			expr: string
@@ -66,7 +66,7 @@ export default (options: ComponentOptions) => {
 			this._states = new Proxy(
 				{ ...(states || {}) },
 				{
-					set: (target: Record<string, any>, keyPath: string, value: any) => {
+					set: (target: Record<string, unknown>, keyPath: string, value: unknown) => {
 						const valueRoute = keyPath.split('.')
 						let currentTarget = target
 						for (const i in valueRoute) {
@@ -74,10 +74,9 @@ export default (options: ComponentOptions) => {
 							if (Number.parseInt(i) === valueRoute.length - 1) {
 								currentTarget[key] = value
 							} else {
-								if (!currentTarget[key]) {
+								if (!currentTarget[key])
 									currentTarget[key] = {}
-								}
-								currentTarget = currentTarget[key]
+								currentTarget = currentTarget[key] as Record<string, unknown>
 							}
 						}
 						// trigger dom updates
@@ -97,7 +96,7 @@ export default (options: ComponentOptions) => {
 
 						return true
 					},
-					get: (target: Record<string, any>, keyPath: string) => {
+					get: (target: Record<string, unknown>, keyPath: string) => {
 						// collect state dependencies
 						if (this._currentRenderingElement) {
 							if (!this._stateToElementsMap[keyPath])
@@ -116,7 +115,7 @@ export default (options: ComponentOptions) => {
 
 							if (!currentTarget[key])
 								currentTarget[key] = {}
-							currentTarget = currentTarget[key]
+							currentTarget = currentTarget[key] as Record<string, unknown>
 						}
 						return undefined
 					},
@@ -205,7 +204,7 @@ export default (options: ComponentOptions) => {
 		}
 
 		private _updateElement(element: HTMLElement) {
-			const renderFunction = (element as any)._renderFunction
+			const renderFunction = (element as { _renderFunction?: () => string | Node })._renderFunction
 			if (renderFunction) {
 				// Set rendering context
 				this._currentRenderingElement = element
@@ -350,11 +349,11 @@ export default (options: ComponentOptions) => {
 								eventName,
 								handlerValue,
 							)
-						} else if (typeof (this as any)[handlerValue] === 'function') {
+						} else if (typeof (this as Record<string, unknown>)[handlerValue] === 'function') {
 							// Handle method reference: @click="handleClick"
 							currentElementNode.addEventListener(
 								eventName,
-								(this as any)[handlerValue].bind(this),
+								((this as unknown as Record<string, (...args: unknown[]) => void>)[handlerValue]).bind(this),
 							)
 						} else {
 							// Handle simple expression: @click="count++" or @input="name = $event.target.value"
@@ -425,12 +424,11 @@ export default (options: ComponentOptions) => {
 			})
 
 			// Add event listener for state changes
-			this._statesListeners[expr] = (newValue: any) => {
-				if (element instanceof HTMLInputElement) {
-					element.value = newValue
-				} else {
+			this._statesListeners[expr] = (newValue: unknown) => {
+				if (element instanceof HTMLInputElement)
+					element.value = newValue as string
+				else
 					element.setAttribute('data-laterano-connect', String(newValue))
-				}
 			}
 		}
 
@@ -482,8 +480,8 @@ export default (options: ComponentOptions) => {
 			// Store current rendered items
 			const renderedItems: Array<{
 				element: Element
-				key: any
-				data: any
+				key: unknown
+				data: unknown
 				index: number
 			}> = []
 
@@ -620,10 +618,10 @@ export default (options: ComponentOptions) => {
 		// Recursively process the element and its children, applying the item context
 		private _processElementWithItemContext(
 			element: Element,
-			itemContext: Record<string, any>,
+			itemContext: Record<string, unknown>,
 		) {
 			// 1. Store the item context of the element so that subsequent updates can find it
-			; (element as any)._itemContext = itemContext
+			; (element as { _itemContext?: Record<string, unknown> })._itemContext = itemContext
 
 			// 2. Process bindings in text nodes
 			const processTextNodes = (node: Node) => {
@@ -768,7 +766,7 @@ export default (options: ComponentOptions) => {
 		private _setupNestedListRendering(
 			element: Element,
 			expr: string,
-			parentItemContext: Record<string, any>,
+			parentItemContext: Record<string, unknown>,
 		) {
 			// Similar to _setupListRendering, but applies to nested situations
 			// Parse the expression (e.g., "subItem in item.subItems")
@@ -837,11 +835,11 @@ export default (options: ComponentOptions) => {
 		// Evaluate expressions using the item context
 		private _evaluateExpressionWithItemContext(
 			expression: string,
-			itemContext: Record<string, any>,
+			itemContext: Record<string, unknown>,
 			index?: number,
 			itemVar?: string,
 			indexVar?: string,
-		): any {
+		): unknown {
 			try {
 				// Check if the expression directly references the item variable
 				if (itemVar && expression === itemVar) {
@@ -857,7 +855,7 @@ export default (options: ComponentOptions) => {
 					for (const part of parts) {
 						if (value === undefined || value === null)
 							return undefined
-						value = value[part]
+						value = (value as { [key: string]: unknown})[part]
 					}
 
 					return value
@@ -911,7 +909,7 @@ export default (options: ComponentOptions) => {
 			}
 		}
 
-		private _evaluateExpression(expression: string): any {
+		private _evaluateExpression(expression: string): unknown {
 			try {
 				// get the state keys and values
 				if (this._states[expression] !== undefined)
@@ -1012,12 +1010,12 @@ export default (options: ComponentOptions) => {
 		private _createHandlerContext(event: Event, element: Element) {
 			// Basic context, including state
 			const context: {
-				[key: string]: any
+				[key: string]: unknown
 				$event: Event
 				$el: Element
 				this: CustomElementImpl // Provide reference to the component instance
-				setState: (keyPath: string, value: any) => void
-				getState: (keyPath: string) => any
+				setState: (keyPath: string, value: unknown) => void
+				getState: (keyPath: string) => unknown
 			} = {
 				...this._states,
 				$event: event,
@@ -1032,10 +1030,10 @@ export default (options: ComponentOptions) => {
 			// 	(name) => {
 			for (const name of Object.getOwnPropertyNames(Object.getPrototypeOf(this)))
 				if (
-					typeof (this as any)[name] === 'function' &&
+					typeof (this as Record<string, unknown>)[name] === 'function' &&
 					name !== 'constructor'
 				)
-					context[name] = (this as any)[name].bind(this)
+					context[name] = (this as unknown as Record<string, (...args: unknown[]) => void>)[name].bind(this)
 
 			return context
 		}
@@ -1147,16 +1145,15 @@ export default (options: ComponentOptions) => {
 		}
 
 		// Get nested state value
-		private _getNestedState(path: string): any {
+		private _getNestedState(path: string): unknown {
 			// Handle nested paths, such as "profile.name"
 			const parts = path.split('.')
 			let result = this._states
 
 			for (const part of parts) {
-				if (result === undefined || result === null) {
+				if (result === undefined || result === null)
 					return undefined
-				}
-				result = result[part]
+				result = (result as { [key: string]: Record<string, unknown> })[part]
 			}
 
 			return result
@@ -1183,23 +1180,23 @@ export default (options: ComponentOptions) => {
 		}
 
 		// state manager
-		setState(keyPath: string, value: any) {
+		setState(keyPath: string, value: unknown) {
 			this._states[keyPath] = value
 		}
 
-		getState(keyPath: string): any {
+		getState(keyPath: string): unknown {
 			const parts = keyPath.split('.')
 			let result = this._states
 			for (const part of parts) {
 				if (result === undefined || result === null)
 					return undefined
-				result = result[part]
+				result = (result as { [key: string]: Record<string, unknown> })[part]
 			}
 			return result
 		}
 
 		// function trigger
-		triggerFunc(eventName: string, ...args: any[]) {
+		triggerFunc(eventName: string, ...args: unknown[]) {
 			funcs?.[eventName]?.call(this, ...args)
 		}
 	}
