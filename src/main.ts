@@ -214,9 +214,9 @@ export default (options: ComponentOptions) => {
 				const result = renderFunction()
 
 				// Update DOM
-				if (typeof result === 'string') {
+				if (typeof result === 'string')
 					element.innerHTML = result
-				} else if (result instanceof Node) {
+				else if (result instanceof Node) {
 					element.innerHTML = ''
 					element.appendChild(result)
 				}
@@ -370,8 +370,9 @@ export default (options: ComponentOptions) => {
 					const macroBindings = Array.from(
 						currentElementNode.attributes,
 					).filter((attr) => attr.name.startsWith('%'))
-					// biome-ignore lint/complexity/noForEach: TODO: will cause a bug, need to be fixed
-					macroBindings.forEach((attr) => {
+
+					// macroBindings.forEach((attr) => {
+					for (const attr of macroBindings) {
 						const macroName = attr.name.substring(1) // Remove '%'
 						const expr = attr.value.trim()
 
@@ -382,13 +383,13 @@ export default (options: ComponentOptions) => {
 						if (macroName === 'connect')
 							// Handle state connection: %connect="stateName"
 							this._setupTwoWayBinding(currentElementNode, expr)
-						else if (macroName === 'if')
+						else if (macroName === 'if') {
 							ifDirectivesToProcess.push({ element: currentElementNode, expr })
-						else if (macroName === 'for')
+						} else if (macroName === 'for')
 							this._setupListRendering(currentElementNode, expr)
-						else if (macroName === 'key') return
+						else if (macroName === 'key') continue
 						else console.warn(`Unknown macro: %${macroName}`)
-					})
+					}
 				}
 			}
 
