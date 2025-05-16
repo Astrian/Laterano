@@ -6,7 +6,7 @@
 > 
 > [ref](https://prts.wiki/w/%E6%B3%B0%E6%8B%89%E5%A4%A7%E5%85%B8:%E5%9C%B0%E7%90%86/%E6%8B%89%E7%89%B9%E5%85%B0#:~:text=%E6%8B%89%E7%89%B9%E5%85%B0%E4%BA%BA,%E5%93%81%EF%BC%8C%E5%8F%97%E5%88%B0%E6%95%99%E5%AE%97%E5%96%9C%E7%88%B1%E3%80%82)
 
-*Laterano* is a front-end framework based on the features of the [native support of vanilla-favoured Web Component feature](https://developer.mozilla.org/en-US/docs/Web/API/Web_components). It allows you to adapt modern MVVM development workflows with the features, abilities, and benefits of Shadow DOM, including native componentized support, styling management, and more.
+*Laterano* is a front-end framework based on the [native support of vanilla-favoured Web Component feature](https://developer.mozilla.org/en-US/docs/Web/API/Web_components). It allows you to adapt modern MVVM development workflows with the features, abilities, and benefits of Shadow DOM, including native componentized support, styling management, and more.
 
 **Note:** Laterano was developed for learning purposes originally and is still under active development. We do not recommend using it inside a production environment.
 
