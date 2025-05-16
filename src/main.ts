@@ -141,7 +141,7 @@ export default (options: ComponentOptions) => {
 			const doc = parser.parseFromString(template, 'text/html')
 
 			const mainContent = doc.body.firstElementChild
-			let rootElement
+			let rootElement: Element
 
 			if (mainContent) {
 				rootElement = document.importNode(mainContent, true)
@@ -160,50 +160,47 @@ export default (options: ComponentOptions) => {
 			if (this._stateToElementsMap[keyPath]) {
 				const updateQueue = new Set<HTMLElement>()
 
-				this._stateToElementsMap[keyPath].forEach((element) => {
+				for (const element of this._stateToElementsMap[keyPath]) {
 					updateQueue.add(element)
-				})
+				}
 
 				this._scheduleUpdate(updateQueue)
 			}
 
 			// Update text bindings that depend on this state
 			if (this._textBindings) {
-				this._textBindings.forEach((binding) => {
+				// this._textBindings.forEach((binding) => {
+				for (const binding of this._textBindings)
 					if (
 						binding.expr === keyPath ||
-						binding.expr.startsWith(keyPath + '.')
-					) {
+						binding.expr.startsWith(`${keyPath}.`)
+					)
 						this._updateTextNode(
 							binding.node,
 							binding.expr,
 							binding.originalContent,
 						)
-					}
-				})
 			}
 
 			// Update attribute bindings that depend on this state
 			if (this._attributeBindings) {
-				this._attributeBindings.forEach((binding) => {
+				for (const binding of this._attributeBindings)
 					if (
 						binding.expr === keyPath ||
-						binding.expr.startsWith(keyPath + '.')
+						binding.expr.startsWith(`${keyPath}.`)
 					) {
 						const value = this._getNestedState(binding.expr)
-						if (value !== undefined) {
+						if (value !== undefined)
 							binding.element.setAttribute(binding.attrName, String(value))
-						}
 					}
-				})
+
 			}
 		}
 
 		private _scheduleUpdate(elements: Set<HTMLElement>) {
 			requestAnimationFrame(() => {
-				elements.forEach((element) => {
+				for (const element of elements)
 					this._updateElement(element)
-				})
 			})
 		}
 
@@ -255,7 +252,14 @@ export default (options: ComponentOptions) => {
 
 			// Traverse the DOM tree
 			let currentNode: Node | null
-			while ((currentNode = walker.nextNode())) {
+			let flag = true
+			while (flag) {
+				currentNode = walker.nextNode()
+				if (!currentNode) {
+					flag = false
+					break
+				}
+
 				// Handle text nodes
 				if (currentNode.nodeType === Node.TEXT_NODE) {
 					const textContent = currentNode.textContent || ''
@@ -269,7 +273,7 @@ export default (options: ComponentOptions) => {
 						// Record nodes and expressions that need to be updated
 						const matches = textContent.match(/\{\{\s*([^}]+)\s*\}\}/g)
 						if (matches) {
-							matches.forEach((match) => {
+							for (const match of matches) {
 								// Extract the expression content, removing {{ }} and spaces
 								const expr = match.replace(/\{\{\s*|\s*\}\}/g, '').trim()
 
@@ -286,7 +290,7 @@ export default (options: ComponentOptions) => {
 								this._stateToElementsMap[expr].add(
 									textNode as unknown as HTMLElement,
 								)
-							})
+							}
 						}
 					}
 				}
@@ -298,7 +302,7 @@ export default (options: ComponentOptions) => {
 					// Traverse all macro attributes
 
 					// Detect :attr="" bindings, such as :src="imageUrl"
-					Array.from(currentElementNode.attributes).forEach((attr) => {
+					for (const attr of Array.from(currentElementNode.attributes)) {
 						if (attr.name.startsWith(':')) {
 							const attrName = attr.name.substring(1) // Remove ':'
 							const expr = attr.value.trim()
@@ -314,13 +318,14 @@ export default (options: ComponentOptions) => {
 								attr.value,
 							)
 						}
-					})
+					}
 
 					// Process @event bindings, such as @click="handleClick"
 					const eventBindings = Array.from(
 						currentElementNode.attributes,
 					).filter((attr) => attr.name.startsWith('@'))
-					eventBindings.forEach((attr) => {
+					// eventBindings.forEach((attr) => {
+					for (const attr of eventBindings) {
 						const eventName = attr.name.substring(1) // Remove '@'
 						const handlerValue = attr.value.trim()
 
@@ -359,12 +364,13 @@ export default (options: ComponentOptions) => {
 								handlerValue,
 							)
 						}
-					})
+					}
 
 					// Process %-started macros, such as %connect="stateName", %if="condition", %for="item in items"
 					const macroBindings = Array.from(
 						currentElementNode.attributes,
 					).filter((attr) => attr.name.startsWith('%'))
+					// biome-ignore lint/complexity/noForEach: TODO: will cause a bug, need to be fixed
 					macroBindings.forEach((attr) => {
 						const macroName = attr.name.substring(1) // Remove '%'
 						const expr = attr.value.trim()
