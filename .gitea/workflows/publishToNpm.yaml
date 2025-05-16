@@ -19,7 +19,7 @@ jobs:
       - name: Install dependencies
         run: npm ci
       - name: Run Biome
-        run: biome ci .
+        run: npm run quality-check
 
   publish:
     runs-on: ubuntu-latest

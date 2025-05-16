@@ -7,7 +7,8 @@
 	"scripts": {
 		"build": "tsc && rollup -c && npm run cleanup-intermediate",
 		"prepare": "npm run build",
-		"cleanup-intermediate": "rimraf dist/main.js dist/types"
+		"cleanup-intermediate": "rimraf dist/main.js dist/types",
+		"quality-check": "biome ci ."
 	},
 	"repository": {
 		"type": "git",
