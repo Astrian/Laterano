@@ -111,14 +111,12 @@ export default (options: ComponentOptions) => {
 						let currentTarget = target
 						for (const i in valueRoute) {
 							const key = valueRoute[i]
-							if (Number.parseInt(i) === valueRoute.length - 1) {
+							if (Number.parseInt(i) === valueRoute.length - 1)
 								return currentTarget[key]
-							} else {
-								if (!currentTarget[key]) {
-									currentTarget[key] = {}
-								}
-								currentTarget = currentTarget[key]
-							}
+
+							if (!currentTarget[key])
+								currentTarget[key] = {}
+							currentTarget = currentTarget[key]
 						}
 						return undefined
 					},
