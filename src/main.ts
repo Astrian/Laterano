@@ -93,8 +93,7 @@ export default (options: ComponentOptions) => {
 							})
 
 						// trigger state update events
-						if (statesListeners && statesListeners[keyPath])
-							statesListeners[keyPath](value)
+						statesListeners?.[keyPath]?.(value)
 
 						return true
 					},
