@@ -1,6 +1,6 @@
 interface CustomElement extends HTMLElement {
-	setState(key_path: string, value: any): void
-	getState(key_path: string): any
+	setState(key_path: string, value: unknown): void
+	getState(key_path: string): unknown
 }
 
 interface ComponentOptions {
@@ -9,91 +9,118 @@ interface ComponentOptions {
 	style?: string
 	onMount?: (this: CustomElement) => void
 	onUnmount?: () => void
-	onAttributeChanged?: (attrName: string, oldValue: string, newValue: string) => void
-	states?: Record<string, any>
-	statesListeners?: { [key: string]: (value: any) => void }
-	funcs?: { [key: string]: (...args: any[]) => void }
+	onAttributeChanged?: (
+		attrName: string,
+		oldValue: string,
+		newValue: string,
+	) => void
+	states?: Record<string, unknown>
+	statesListeners?: { [key: string]: (value: unknown) => void }
+	funcs?: { [key: string]: (...args: unknown[]) => void }
 }
 
 export default (options: ComponentOptions) => {
-	const { tag, template, style, onMount, onUnmount, onAttributeChanged, states, statesListeners, funcs } = options
+	const {
+		tag,
+		template,
+		style,
+		onMount,
+		onUnmount,
+		onAttributeChanged,
+		states,
+		statesListeners,
+		funcs,
+	} = options
 	const componentRegistry = new Map()
 	componentRegistry.set(tag, options)
 
 	class CustomElementImpl extends HTMLElement {
-		private _states: Record<string, any> = {}
+		private _states: Record<string, unknown> = {}
 		private _stateToElementsMap: Record<string, Set<HTMLElement>> = {}
 		private _currentRenderingElement: HTMLElement | null = null
-		private _statesListeners: Record<string, Function> = {}
-		private _textBindings: Array<{ node: Text, expr: string, originalContent: string }> = []
-		private _attributeBindings: Array<{ element: Element, attrName: string, expr: string, template: string }> = []
-		private _conditionalElements: Map<Element, {
-			expr: string,
-			placeholder: Comment,
-			isPresent: boolean
-		}> = new Map()
+		private _statesListeners: Record<string, (...args: unknown[]) => void> = {}
+		private _textBindings: Array<{
+			node: Text
+			expr: string
+			originalContent: string
+		}> = []
+		private _attributeBindings: Array<{
+			element: Element
+			attrName: string
+			expr: string
+			template: string
+		}> = []
+		private _conditionalElements: Map<
+			Element,
+			{
+				expr: string
+				placeholder: Comment
+				isPresent: boolean
+			}
+		> = new Map()
 
 		constructor() {
 			super()
 
 			// copy state from options
-			this._states = new Proxy({ ...(states || {}) }, {
-				set: (target: Record<string, any>, keyPath: string, value: any) => {
-					const valueRoute = keyPath.split('.')
-					let currentTarget = target
-					for (let i in valueRoute) {
-						const key = valueRoute[i]
-						if (parseInt(i) === valueRoute.length - 1) {
-							currentTarget[key] = value
-						} else {
-							if (!currentTarget[key]) {
-								currentTarget[key] = {}
+			this._states = new Proxy(
+				{ ...(states || {}) },
+				{
+					set: (target: Record<string, unknown>, keyPath: string, value: unknown) => {
+						const valueRoute = keyPath.split('.')
+						let currentTarget = target
+						for (const i in valueRoute) {
+							const key = valueRoute[i]
+							if (Number.parseInt(i) === valueRoute.length - 1) {
+								currentTarget[key] = value
+							} else {
+								if (!currentTarget[key])
+									currentTarget[key] = {}
+								currentTarget = currentTarget[key] as Record<string, unknown>
 							}
-							currentTarget = currentTarget[key]
 						}
-					}
-					// trigger dom updates
-					this._triggerDomUpdates(keyPath)
-					if (this._statesListeners[keyPath])
-						this._statesListeners[keyPath](value)
+						// trigger dom updates
+						this._triggerDomUpdates(keyPath)
+						if (this._statesListeners[keyPath])
+							this._statesListeners[keyPath](value)
 
-					// trigger %if macros
-					if (this._conditionalElements.size > 0)
-						this._conditionalElements.forEach((info, element) => {
-							if (info.expr.includes(keyPath))
-								this._evaluateIfCondition(element, info.expr)
-						})
+						// trigger %if macros
+						if (this._conditionalElements.size > 0)
+							this._conditionalElements.forEach((info, element) => {
+								if (info.expr.includes(keyPath))
+									this._evaluateIfCondition(element, info.expr)
+							})
 
-					// trigger state update events
-					if (statesListeners && statesListeners[keyPath])
-						statesListeners[keyPath](value)
+						// trigger state update events
+						statesListeners?.[keyPath]?.(value)
 
-					return true
+						return true
+					},
+					get: (target: Record<string, unknown>, keyPath: string) => {
+						// collect state dependencies
+						if (this._currentRenderingElement) {
+							if (!this._stateToElementsMap[keyPath])
+								this._stateToElementsMap[keyPath] = new Set()
+							this._stateToElementsMap[keyPath].add(
+								this._currentRenderingElement,
+							)
+						}
+
+						const valueRoute = keyPath.split('.')
+						let currentTarget = target
+						for (const i in valueRoute) {
+							const key = valueRoute[i]
+							if (Number.parseInt(i) === valueRoute.length - 1)
+								return currentTarget[key]
+
+							if (!currentTarget[key])
+								currentTarget[key] = {}
+							currentTarget = currentTarget[key] as Record<string, unknown>
+						}
+						return undefined
+					},
 				},
-				get: (target: Record<string, any>, keyPath: string) => {
-					// collect state dependencies
-					if (this._currentRenderingElement) {
-						if (!this._stateToElementsMap[keyPath])
-							this._stateToElementsMap[keyPath] = new Set()
-						this._stateToElementsMap[keyPath].add(this._currentRenderingElement)
-					}
-
-					const valueRoute = keyPath.split('.')
-					let currentTarget = target
-					for (let i in valueRoute) {
-						const key = valueRoute[i]
-						if (parseInt(i) === valueRoute.length - 1) {
-							return currentTarget[key]
-						} else {
-							if (!currentTarget[key]) {
-								currentTarget[key] = {}
-							}
-							currentTarget = currentTarget[key]
-						}
-					}
-					return undefined
-				}
-			})
+			)
 
 			// initialize dom tree and append to shadow root
 			this._initialize()
@@ -113,7 +140,7 @@ export default (options: ComponentOptions) => {
 			const doc = parser.parseFromString(template, 'text/html')
 
 			const mainContent = doc.body.firstElementChild
-			let rootElement
+			let rootElement: Element
 
 			if (mainContent) {
 				rootElement = document.importNode(mainContent, true)
@@ -132,45 +159,52 @@ export default (options: ComponentOptions) => {
 			if (this._stateToElementsMap[keyPath]) {
 				const updateQueue = new Set<HTMLElement>()
 
-				this._stateToElementsMap[keyPath].forEach(element => {
+				for (const element of this._stateToElementsMap[keyPath]) {
 					updateQueue.add(element)
-				})
+				}
 
 				this._scheduleUpdate(updateQueue)
 			}
 
 			// Update text bindings that depend on this state
 			if (this._textBindings) {
-				this._textBindings.forEach(binding => {
-					if (binding.expr === keyPath || binding.expr.startsWith(keyPath + '.')) {
-						this._updateTextNode(binding.node, binding.expr, binding.originalContent)
-					}
-				})
+				// this._textBindings.forEach((binding) => {
+				for (const binding of this._textBindings)
+					if (
+						binding.expr === keyPath ||
+						binding.expr.startsWith(`${keyPath}.`)
+					)
+						this._updateTextNode(
+							binding.node,
+							binding.expr,
+							binding.originalContent,
+						)
 			}
 
 			// Update attribute bindings that depend on this state
 			if (this._attributeBindings) {
-				this._attributeBindings.forEach(binding => {
-					if (binding.expr === keyPath || binding.expr.startsWith(keyPath + '.')) {
+				for (const binding of this._attributeBindings)
+					if (
+						binding.expr === keyPath ||
+						binding.expr.startsWith(`${keyPath}.`)
+					) {
 						const value = this._getNestedState(binding.expr)
-						if (value !== undefined) {
+						if (value !== undefined)
 							binding.element.setAttribute(binding.attrName, String(value))
-						}
 					}
-				})
+
 			}
 		}
 
 		private _scheduleUpdate(elements: Set<HTMLElement>) {
 			requestAnimationFrame(() => {
-				elements.forEach(element => {
+				for (const element of elements)
 					this._updateElement(element)
-				})
 			})
 		}
 
 		private _updateElement(element: HTMLElement) {
-			const renderFunction = (element as any)._renderFunction
+			const renderFunction = (element as { _renderFunction?: () => string | Node })._renderFunction
 			if (renderFunction) {
 				// Set rendering context
 				this._currentRenderingElement = element
@@ -179,9 +213,9 @@ export default (options: ComponentOptions) => {
 				const result = renderFunction()
 
 				// Update DOM
-				if (typeof result === 'string') {
+				if (typeof result === 'string')
 					element.innerHTML = result
-				} else if (result instanceof Node) {
+				else if (result instanceof Node) {
 					element.innerHTML = ''
 					element.appendChild(result)
 				}
@@ -203,16 +237,28 @@ export default (options: ComponentOptions) => {
 			const walker = document.createTreeWalker(
 				element,
 				NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT,
-				null
+				null,
 			)
 
 			// Store nodes and expressions that need to be updated
-			const textBindings: Array<{ node: Text, expr: string, originalContent: string }> = []
-			const ifDirectivesToProcess: Array<{ element: Element, expr: string }> = []
+			const textBindings: Array<{
+				node: Text
+				expr: string
+				originalContent: string
+			}> = []
+			const ifDirectivesToProcess: Array<{ element: Element; expr: string }> =
+				[]
 
 			// Traverse the DOM tree
 			let currentNode: Node | null
-			while (currentNode = walker.nextNode()) {
+			let flag = true
+			while (flag) {
+				currentNode = walker.nextNode()
+				if (!currentNode) {
+					flag = false
+					break
+				}
+
 				// Handle text nodes
 				if (currentNode.nodeType === Node.TEXT_NODE) {
 					const textContent = currentNode.textContent || ''
@@ -226,7 +272,7 @@ export default (options: ComponentOptions) => {
 						// Record nodes and expressions that need to be updated
 						const matches = textContent.match(/\{\{\s*([^}]+)\s*\}\}/g)
 						if (matches) {
-							matches.forEach(match => {
+							for (const match of matches) {
 								// Extract the expression content, removing {{ }} and spaces
 								const expr = match.replace(/\{\{\s*|\s*\}\}/g, '').trim()
 
@@ -240,21 +286,22 @@ export default (options: ComponentOptions) => {
 								if (!this._stateToElementsMap[expr])
 									this._stateToElementsMap[expr] = new Set()
 
-								this._stateToElementsMap[expr].add(textNode as unknown as HTMLElement)
-							})
+								this._stateToElementsMap[expr].add(
+									textNode as unknown as HTMLElement,
+								)
+							}
 						}
 					}
 				}
 
 				// Handle element nodes (can extend to handle attribute bindings, etc.)
 				else if (currentNode.nodeType === Node.ELEMENT_NODE) {
-
 					const currentElementNode = currentNode as Element // Renamed to avoid conflict with outer 'element'
 
 					// Traverse all macro attributes
 
 					// Detect :attr="" bindings, such as :src="imageUrl"
-					Array.from(currentElementNode.attributes).forEach(attr => {
+					for (const attr of Array.from(currentElementNode.attributes)) {
 						if (attr.name.startsWith(':')) {
 							const attrName = attr.name.substring(1) // Remove ':'
 							const expr = attr.value.trim()
@@ -263,13 +310,21 @@ export default (options: ComponentOptions) => {
 							currentElementNode.removeAttribute(attr.name)
 
 							// Set up attribute binding
-							this._setupAttributeBinding(currentElementNode, attrName, expr, attr.value)
+							this._setupAttributeBinding(
+								currentElementNode,
+								attrName,
+								expr,
+								attr.value,
+							)
 						}
-					})
+					}
 
 					// Process @event bindings, such as @click="handleClick"
-					const eventBindings = Array.from(currentElementNode.attributes).filter(attr => attr.name.startsWith('@'))
-					eventBindings.forEach(attr => {
+					const eventBindings = Array.from(
+						currentElementNode.attributes,
+					).filter((attr) => attr.name.startsWith('@'))
+					// eventBindings.forEach((attr) => {
+					for (const attr of eventBindings) {
 						const eventName = attr.name.substring(1) // Remove '@'
 						const handlerValue = attr.value.trim()
 
@@ -279,22 +334,44 @@ export default (options: ComponentOptions) => {
 						// Handle different types of event handlers
 						if (handlerValue.includes('=>')) {
 							// Handle arrow function: @click="e => setState('count', count + 1)"
-							this._setupArrowFunctionHandler(currentElementNode, eventName, handlerValue)
-						} else if (handlerValue.includes('(') && handlerValue.includes(')')) {
+							this._setupArrowFunctionHandler(
+								currentElementNode,
+								eventName,
+								handlerValue,
+							)
+						} else if (
+							handlerValue.includes('(') &&
+							handlerValue.includes(')')
+						) {
 							// Handle function call: @click="increment(5)"
-							this._setupFunctionCallHandler(currentElementNode, eventName, handlerValue)
-						} else if (typeof (this as any)[handlerValue] === 'function') {
+							this._setupFunctionCallHandler(
+								currentElementNode,
+								eventName,
+								handlerValue,
+							)
+						} else if (typeof (this as Record<string, unknown>)[handlerValue] === 'function') {
 							// Handle method reference: @click="handleClick"
-							currentElementNode.addEventListener(eventName, (this as any)[handlerValue].bind(this))
+							currentElementNode.addEventListener(
+								eventName,
+								((this as unknown as Record<string, (...args: unknown[]) => void>)[handlerValue]).bind(this),
+							)
 						} else {
 							// Handle simple expression: @click="count++" or @input="name = $event.target.value"
-							this._setupExpressionHandler(currentElementNode, eventName, handlerValue)
+							this._setupExpressionHandler(
+								currentElementNode,
+								eventName,
+								handlerValue,
+							)
 						}
-					})
+					}
 
 					// Process %-started macros, such as %connect="stateName", %if="condition", %for="item in items"
-					const macroBindings = Array.from(currentElementNode.attributes).filter(attr => attr.name.startsWith('%'))
-					macroBindings.forEach(attr => {
+					const macroBindings = Array.from(
+						currentElementNode.attributes,
+					).filter((attr) => attr.name.startsWith('%'))
+
+					// macroBindings.forEach((attr) => {
+					for (const attr of macroBindings) {
 						const macroName = attr.name.substring(1) // Remove '%'
 						const expr = attr.value.trim()
 
@@ -302,19 +379,16 @@ export default (options: ComponentOptions) => {
 						currentElementNode.removeAttribute(attr.name)
 
 						// Handle different types of macros
-						if (macroName === 'connect') // Handle state connection: %connect="stateName"
+						if (macroName === 'connect')
+							// Handle state connection: %connect="stateName"
 							this._setupTwoWayBinding(currentElementNode, expr)
-						else if (macroName === 'if')
+						else if (macroName === 'if') {
 							ifDirectivesToProcess.push({ element: currentElementNode, expr })
-						else if (macroName === 'for')
+						} else if (macroName === 'for')
 							this._setupListRendering(currentElementNode, expr)
-						else if (macroName === 'key')
-							return
-						else
-							console.warn(`Unknown macro: %${macroName}`)
-					})
-
-
+						else if (macroName === 'key') continue
+						else console.warn(`Unknown macro: %${macroName}`)
+					}
 				}
 			}
 
@@ -336,7 +410,9 @@ export default (options: ComponentOptions) => {
 			if (value !== undefined)
 				element.setAttribute('data-laterano-connect', String(value))
 			else
-				console.error(`State \`${expr}\` not found in the component state. Although Laterano will try to work with it, it may has potentially unexpected behavior.`)
+				console.error(
+					`State \`${expr}\` not found in the component state. Although Laterano will try to work with it, it may has potentially unexpected behavior.`,
+				)
 
 			// Add event listener for input events
 			element.addEventListener('input', (event: Event) => {
@@ -348,42 +424,41 @@ export default (options: ComponentOptions) => {
 			})
 
 			// Add event listener for state changes
-			this._statesListeners[expr] = (newValue: any) => {
-				if (element instanceof HTMLInputElement) {
-					element.value = newValue
-				} else {
+			this._statesListeners[expr] = (newValue: unknown) => {
+				if (element instanceof HTMLInputElement)
+					element.value = newValue as string
+				else
 					element.setAttribute('data-laterano-connect', String(newValue))
-				}
 			}
 		}
 
 		// Handle condition rendering (%if macro)
 		private _setupConditionRendering(element: Element, expr: string) {
-
 			const placeholder = document.createComment(` %if: ${expr} `)
 			element.parentNode?.insertBefore(placeholder, element)
 
 			this._conditionalElements.set(element, {
 				expr,
 				placeholder,
-				isPresent: true
+				isPresent: true,
 			})
 
 			this._evaluateIfCondition(element, expr)
 
 			const statePaths = this._extractStatePathsFromExpression(expr)
-			statePaths.forEach(path => {
-				if (!this._stateToElementsMap[path]) {
+			for (const path of statePaths) {
+				if (!this._stateToElementsMap[path])
 					this._stateToElementsMap[path] = new Set()
-				}
 				this._stateToElementsMap[path].add(element as HTMLElement)
-			})
+			}
 		}
 
 		// Handle list rendering (%for macro)
 		private _setupListRendering(element: Element, expr: string) {
 			// Parse the expression (e.g., "item in items" or "(item, index) in items")
-			const match = expr.match(/(?:\(([^,]+),\s*([^)]+)\)|([^,\s]+))\s+in\s+(.+)/)
+			const match = expr.match(
+				/(?:\(([^,]+),\s*([^)]+)\)|([^,\s]+))\s+in\s+(.+)/,
+			)
 			if (!match) {
 				console.error(`Invalid %for expression: ${expr}`)
 				return
@@ -404,9 +479,9 @@ export default (options: ComponentOptions) => {
 
 			// Store current rendered items
 			const renderedItems: Array<{
-				element: Element,
-				key: any,
-				data: any,
+				element: Element
+				key: unknown
+				data: unknown
 				index: number
 			}> = []
 
@@ -414,7 +489,9 @@ export default (options: ComponentOptions) => {
 			const updateList = () => {
 				const collection = this._evaluateExpression(collectionExpr)
 				if (!collection || !Array.isArray(collection)) {
-					console.warn(`Collection "${collectionExpr}" is not an array or does not exist`)
+					console.warn(
+						`Collection "${collectionExpr}" is not an array or does not exist`,
+					)
 					return
 				}
 
@@ -425,23 +502,23 @@ export default (options: ComponentOptions) => {
 				}
 
 				// Detach all currently rendered DOM items managed by this instance.
-				renderedItems.forEach(item => {
-					if (item.element.parentNode === parentNode) {
-						parentNode.removeChild(item.element);
-					}
-				});
+				for (const item of renderedItems)
+					if (item.element.parentNode === parentNode)
+						parentNode.removeChild(item.element)
 
 				// Get key attribute if available
 				const keyAttr = template.getAttribute('%key')
-				if (!keyAttr) console.warn(`%key attribute not found in the template, which is not a recommended practice.`)
+				if (!keyAttr)
+					console.warn(
+						'%key attribute not found in the template, which is not a recommended practice.'
+					)
 
 				// Store a map of existing items by key for reuse
 				const existingElementsByKey = new Map()
-				renderedItems.forEach(item => {
-					if (item.key !== undefined) {
+				// renderedItems.forEach((item) => {
+				for (const item of renderedItems)
+					if (item.key !== undefined)
 						existingElementsByKey.set(item.key, item)
-					}
-				})
 
 				// Clear rendered items
 				renderedItems.length = 0
@@ -452,7 +529,15 @@ export default (options: ComponentOptions) => {
 				// Create or update items in the list
 				collection.forEach((item, index) => {
 					// Determine the key for this item
-					const key = keyAttr ? this._evaluateExpressionWithItemContext(keyAttr ?? '', item, index, itemVar, indexVar ? indexVar : undefined) : index
+					const key = keyAttr
+						? this._evaluateExpressionWithItemContext(
+							keyAttr ?? '',
+							item,
+							index,
+							itemVar,
+							indexVar ? indexVar : undefined,
+						)
+						: index
 
 					// Check if we can reuse an existing element
 					const existingItem = existingElementsByKey.get(key)
@@ -472,19 +557,21 @@ export default (options: ComponentOptions) => {
 						element: itemElement,
 						key,
 						data: item,
-						index
+						index,
 					})
 
 					// Create item context for this item
 					const itemContext = {
-						[itemVar]: item
+						[itemVar]: item,
 					}
-					if (indexVar)
-						itemContext[indexVar] = index
+					if (indexVar) itemContext[indexVar] = index
 
 					// insert %key attribute, which dynamically bind the key
 					if (keyAttr) {
-						const keyValue = this._evaluateExpressionWithItemContext(keyAttr, itemContext)
+						const keyValue = this._evaluateExpressionWithItemContext(
+							keyAttr,
+							itemContext,
+						)
 						itemElement.setAttribute('data-laterano-key', String(keyValue))
 					}
 
@@ -503,23 +590,24 @@ export default (options: ComponentOptions) => {
 				placeholder.parentNode?.insertBefore(fragment, placeholder.nextSibling)
 
 				// Remove any remaining unused items
-				existingElementsByKey.forEach(item => {
-					if (item.element.parentNode) {
+				// existingElementsByKey.forEach((item) => {
+				for (const item of existingElementsByKey.values())
+					if (item.element.parentNode)
 						item.element.parentNode.removeChild(item.element)
-					}
-				})
 			}
 
 			// Initial render
 			updateList()
 
 			// Set up state dependency for collection changes
-			if (!this._stateToElementsMap[collectionExpr]) {
+			if (!this._stateToElementsMap[collectionExpr])
 				this._stateToElementsMap[collectionExpr] = new Set()
-			}
+
 			// Using a unique identifier for this list rendering instance
 			const listVirtualElement = document.createElement('div')
-			this._stateToElementsMap[collectionExpr].add(listVirtualElement as HTMLElement)
+			this._stateToElementsMap[collectionExpr].add(
+				listVirtualElement as HTMLElement,
+			)
 
 			// Add listener for state changes
 			this._statesListeners[collectionExpr] = () => {
@@ -528,9 +616,12 @@ export default (options: ComponentOptions) => {
 		}
 
 		// Recursively process the element and its children, applying the item context
-		private _processElementWithItemContext(element: Element, itemContext: Record<string, any>) {
+		private _processElementWithItemContext(
+			element: Element,
+			itemContext: Record<string, unknown>,
+		) {
 			// 1. Store the item context of the element so that subsequent updates can find it
-			(element as any)._itemContext = itemContext
+			; (element as { _itemContext?: Record<string, unknown> })._itemContext = itemContext
 
 			// 2. Process bindings in text nodes
 			const processTextNodes = (node: Node) => {
@@ -538,40 +629,49 @@ export default (options: ComponentOptions) => {
 					const textContent = node.textContent || ''
 					if (textContent.includes('{{')) {
 						const textNode = node as Text
-						const updatedContent = textContent.replace(/\{\{\s*([^}]+)\s*\}\}/g, (match, expr) => {
-							const value = this._evaluateExpressionWithItemContext(expr.trim(), itemContext)
-							return value !== undefined ? String(value) : ''
-						})
+						const updatedContent = textContent.replace(
+							/\{\{\s*([^}]+)\s*\}\}/g,
+							(match, expr) => {
+								const value = this._evaluateExpressionWithItemContext(
+									expr.trim(),
+									itemContext,
+								)
+								return value !== undefined ? String(value) : ''
+							},
+						)
 						textNode.textContent = updatedContent
 					}
 				}
 			}
 
 			// Process the text nodes of the element itself
-			Array.from(element.childNodes).forEach(node => {
-				if (node.nodeType === Node.TEXT_NODE) {
+			// Array.from(element.childNodes).forEach((node) => {
+			for (const node of Array.from(element.childNodes))
+				if (node.nodeType === Node.TEXT_NODE)
 					processTextNodes(node)
-				}
-			})
 
 			// 3. Process attribute bindings (:attr)
-			Array.from(element.attributes).forEach(attr => {
+			// Array.from(element.attributes).forEach((attr) => {
+			for (const attr of Array.from(element.attributes)) {
 				if (attr.name.startsWith(':')) {
 					const attrName = attr.name.substring(1)
 					const expr = attr.value.trim()
-					const value = this._evaluateExpressionWithItemContext(expr, itemContext)
+					const value = this._evaluateExpressionWithItemContext(
+						expr,
+						itemContext,
+					)
 
-					if (value !== undefined) {
+					if (value !== undefined)
 						element.setAttribute(attrName, String(value))
-					}
 
 					// Remove the original binding attribute (execute only for cloned templates once)
 					element.removeAttribute(attr.name)
 				}
-			})
+			}
 
 			// 4. Process event bindings (@event)
-			Array.from(element.attributes).forEach(attr => {
+			// Array.from(element.attributes).forEach((attr) => {
+			for (const attr of Array.from(element.attributes)) {
 				if (attr.name.startsWith('@')) {
 					const eventName = attr.name.substring(1)
 					const handlerValue = attr.value.trim()
@@ -587,24 +687,28 @@ export default (options: ComponentOptions) => {
 								...this._createHandlerContext(event, element),
 								...itemContext,
 								$event: event,
-								$el: element
+								$el: element,
 							}
 
 							// Execute the expression
 							const fnStr = `with(this) { ${handlerValue} }`
 							new Function(fnStr).call(mergedContext)
 						} catch (err) {
-							console.error(`Error executing event handler with item context: ${handlerValue}`, err)
+							console.error(
+								`Error executing event handler with item context: ${handlerValue}`,
+								err,
+							)
 						}
 					})
 				}
-			})
+			}
 
 			// 5. Process conditional rendering (%if)
 			let isConditional = false
 			let shouldDisplay = true
 
-			Array.from(element.attributes).forEach(attr => {
+			// Array.from(element.attributes).forEach((attr) => {
+			for (const attr of Array.from(element.attributes)) {
 				if (attr.name === '%if') {
 					isConditional = true
 					const expr = attr.value.trim()
@@ -613,14 +717,17 @@ export default (options: ComponentOptions) => {
 					element.removeAttribute(attr.name)
 
 					// Calculate the condition
-					const result = this._evaluateExpressionWithItemContext(expr, itemContext)
+					const result = this._evaluateExpressionWithItemContext(
+						expr,
+						itemContext,
+					)
 					shouldDisplay = Boolean(result)
 
 					// Apply the condition (in the list item context, we use display style to simplify)
 					if (!shouldDisplay)
 						(element as HTMLElement).style.display = 'none'
 				}
-			})
+			}
 
 			// If the condition evaluates to false, skip further processing of this element
 			if (isConditional && !shouldDisplay) {
@@ -630,7 +737,8 @@ export default (options: ComponentOptions) => {
 			// 6. Process nested list rendering (%for)
 			let hasForDirective = false
 
-			Array.from(element.attributes).forEach(attr => {
+			// Array.from(element.attributes).forEach((attr) => {
+			for (const attr of Array.from(element.attributes)) {
 				if (attr.name === '%for') {
 					hasForDirective = true
 					const forExpr = attr.value.trim()
@@ -642,24 +750,29 @@ export default (options: ComponentOptions) => {
 					// Note: We need to evaluate the collection expression through the current item context here
 					this._setupNestedListRendering(element, forExpr, itemContext)
 				}
-			})
-
-			// If this element is a list element, skip child element processing (they will be processed by the list processor)
-			if (hasForDirective) {
-				return
 			}
 
+			// If this element is a list element, skip child element processing (they will be processed by the list processor)
+			if (hasForDirective)
+				return
+
 			// 7. Recursively process all child elements
-			Array.from(element.children).forEach(child => {
+			// Array.from(element.children).forEach((child) => {
+			for (const child of Array.from(element.children))
 				this._processElementWithItemContext(child, itemContext)
-			})
 		}
 
 		// Set up nested list rendering
-		private _setupNestedListRendering(element: Element, expr: string, parentItemContext: Record<string, any>) {
+		private _setupNestedListRendering(
+			element: Element,
+			expr: string,
+			parentItemContext: Record<string, unknown>,
+		) {
 			// Similar to _setupListRendering, but applies to nested situations
 			// Parse the expression (e.g., "subItem in item.subItems")
-			const match = expr.match(/(?:\(([^,]+),\s*([^)]+)\)|([^,\s]+))\s+in\s+(.+)/)
+			const match = expr.match(
+				/(?:\(([^,]+),\s*([^)]+)\)|([^,\s]+))\s+in\s+(.+)/,
+			)
 			if (!match) {
 				console.error(`Invalid nested %for expression: ${expr}`)
 				return
@@ -671,10 +784,15 @@ export default (options: ComponentOptions) => {
 			const collectionExpr = match[4].trim()
 
 			// Evaluate the collection expression, using the parent item context
-			const collection = this._evaluateExpressionWithItemContext(collectionExpr, parentItemContext)
+			const collection = this._evaluateExpressionWithItemContext(
+				collectionExpr,
+				parentItemContext,
+			)
 
 			if (!collection || !Array.isArray(collection)) {
-				console.warn(`Nested collection "${collectionExpr}" is not an array or does not exist`)
+				console.warn(
+					`Nested collection "${collectionExpr}" is not an array or does not exist`,
+				)
 				return
 			}
 
@@ -693,7 +811,7 @@ export default (options: ComponentOptions) => {
 				// Create a nested item context, merging the parent context
 				const nestedItemContext = {
 					...parentItemContext,
-					[itemVar]: item
+					[itemVar]: item,
 				}
 
 				if (indexVar) {
@@ -705,14 +823,23 @@ export default (options: ComponentOptions) => {
 
 				// TODO: detect list items existed inside the view, use replace instead of remove and re-add,
 				// to improve performance
-				
+
 				// Insert the item element into the DOM
-				placeholder.parentNode?.insertBefore(itemElement, placeholder.nextSibling)
+				placeholder.parentNode?.insertBefore(
+					itemElement,
+					placeholder.nextSibling,
+				)
 			})
 		}
 
 		// Evaluate expressions using the item context
-		private _evaluateExpressionWithItemContext(expression: string, itemContext: Record<string, any>, index?: number, itemVar?: string, indexVar?: string): any {
+		private _evaluateExpressionWithItemContext(
+			expression: string,
+			itemContext: Record<string, unknown>,
+			index?: number,
+			itemVar?: string,
+			indexVar?: string,
+		): unknown {
 			try {
 				// Check if the expression directly references the item variable
 				if (itemVar && expression === itemVar) {
@@ -720,16 +847,15 @@ export default (options: ComponentOptions) => {
 				}
 
 				// Check if the expression is an item property path
-				if (itemVar && expression.startsWith(itemVar + '.')) {
+				if (itemVar && expression.startsWith(`${itemVar}.`)) {
 					const propertyPath = expression.substring(itemVar.length + 1)
 					const parts = propertyPath.split('.')
 					let value = itemContext[itemVar]
 
 					for (const part of parts) {
-						if (value === undefined || value === null) {
+						if (value === undefined || value === null)
 							return undefined
-						}
-						value = value[part]
+						value = (value as { [key: string]: unknown})[part]
 					}
 
 					return value
@@ -751,7 +877,10 @@ export default (options: ComponentOptions) => {
 				const func = new Function(...contextKeys, `return ${expression}`)
 				return func(...contextValues)
 			} catch (error) {
-				console.error(`Error evaluating expression with item context: ${expression}`, error)
+				console.error(
+					`Error evaluating expression with item context: ${expression}`,
+					error,
+				)
 				return undefined
 			}
 		}
@@ -765,10 +894,14 @@ export default (options: ComponentOptions) => {
 			const shouldShow = Boolean(result)
 
 			if (shouldShow !== info.isPresent) {
-				if (shouldShow) // Insert the element back into the DOM
-					info.placeholder.parentNode?.insertBefore(element, info.placeholder.nextSibling)
-				else // Remove the element from the DOM
-					element.parentNode?.removeChild(element)
+				if (shouldShow)
+					// Insert the element back into the DOM
+					info.placeholder.parentNode?.insertBefore(
+						element,
+						info.placeholder.nextSibling,
+					)
+				// Remove the element from the DOM
+				else element.parentNode?.removeChild(element)
 
 				// Update the state
 				info.isPresent = shouldShow
@@ -776,7 +909,7 @@ export default (options: ComponentOptions) => {
 			}
 		}
 
-		private _evaluateExpression(expression: string): any {
+		private _evaluateExpression(expression: string): unknown {
 			try {
 				// get the state keys and values
 				if (this._states[expression] !== undefined)
@@ -789,7 +922,9 @@ export default (options: ComponentOptions) => {
 				const func = new Function(...stateKeys, `return ${expression}`)
 				const execRes = func(...stateValues)
 				if (typeof execRes !== 'boolean')
-					throw new Error(`The expression "${expression}" must return a boolean value.`)
+					throw new Error(
+						`The expression "${expression}" must return a boolean value.`,
+					)
 				return execRes
 			} catch (error) {
 				console.error(`Error evaluating expression: ${expression}`, error)
@@ -799,13 +934,18 @@ export default (options: ComponentOptions) => {
 
 		private _extractStatePathsFromExpression(expression: string): string[] {
 			const matches = expression.match(/[a-zA-Z_$][a-zA-Z0-9_$]*/g) || []
-			return matches.filter(match =>
-				!['true', 'false', 'null', 'undefined', 'this'].includes(match)
+			return matches.filter(
+				(match) =>
+					!['true', 'false', 'null', 'undefined', 'this'].includes(match),
 			)
 		}
 
 		// Handle arrow function
-		private _setupArrowFunctionHandler(element: Element, eventName: string, handlerValue: string) {
+		private _setupArrowFunctionHandler(
+			element: Element,
+			eventName: string,
+			handlerValue: string,
+		) {
 			element.addEventListener(eventName, (event: Event) => {
 				try {
 					// Arrow function parsing
@@ -814,11 +954,9 @@ export default (options: ComponentOptions) => {
 						throw new Error(`Invalid arrow function syntax: ${handlerValue}`)
 					}
 					const paramsStr = (() => {
-						if (splitted[0].includes('(')) {
+						if (splitted[0].includes('('))
 							return splitted[0].trim()
-						} else {
-							return `(${splitted[0].trim()})`
-						}
+						return `(${splitted[0].trim()})`
 					})()
 					const bodyStr = splitted[1].trim()
 
@@ -860,7 +998,10 @@ export default (options: ComponentOptions) => {
 						handlerFn.apply(context, [event])
 					}
 				} catch (err) {
-					console.error(`Error executing arrow function handler: ${handlerValue}`, err)
+					console.error(
+						`Error executing arrow function handler: ${handlerValue}`,
+						err,
+					)
 				}
 			})
 		}
@@ -869,33 +1010,40 @@ export default (options: ComponentOptions) => {
 		private _createHandlerContext(event: Event, element: Element) {
 			// Basic context, including state
 			const context: {
-				[key: string]: any
+				[key: string]: unknown
 				$event: Event
 				$el: Element
 				this: CustomElementImpl // Provide reference to the component instance
-				setState: (keyPath: string, value: any) => void
-				getState: (keyPath: string) => any
+				setState: (keyPath: string, value: unknown) => void
+				getState: (keyPath: string) => unknown
 			} = {
 				...this._states,
 				$event: event,
 				$el: element,
 				this: this, // Provide reference to the component instance
 				setState: this.setState.bind(this),
-				getState: this.getState.bind(this)
+				getState: this.getState.bind(this),
 			}
 
 			// Add all methods of the component
-			Object.getOwnPropertyNames(Object.getPrototypeOf(this)).forEach(name => {
-				if (typeof (this as any)[name] === 'function' && name !== 'constructor') {
-					context[name] = (this as any)[name].bind(this)
-				}
-			})
+			// Object.getOwnPropertyNames(Object.getPrototypeOf(this)).forEach(
+			// 	(name) => {
+			for (const name of Object.getOwnPropertyNames(Object.getPrototypeOf(this)))
+				if (
+					typeof (this as Record<string, unknown>)[name] === 'function' &&
+					name !== 'constructor'
+				)
+					context[name] = (this as unknown as Record<string, (...args: unknown[]) => void>)[name].bind(this)
 
 			return context
 		}
 
 		// Handle function call, such as @click="increment(5)"
-		private _setupFunctionCallHandler(element: Element, eventName: string, handlerValue: string) {
+		private _setupFunctionCallHandler(
+			element: Element,
+			eventName: string,
+			handlerValue: string,
+		) {
 			element.addEventListener(eventName, (event: Event) => {
 				try {
 					// Create context object
@@ -910,13 +1058,20 @@ export default (options: ComponentOptions) => {
 
 					new Function(fnStr).call(context)
 				} catch (err) {
-					console.error(`Error executing function call handler: ${handlerValue}`, err)
+					console.error(
+						`Error executing function call handler: ${handlerValue}`,
+						err,
+					)
 				}
 			})
 		}
 
 		// Handle simple expression, such as @click="count++" or @input="name = $event.target.value"
-		private _setupExpressionHandler(element: Element, eventName: string, handlerValue: string) {
+		private _setupExpressionHandler(
+			element: Element,
+			eventName: string,
+			handlerValue: string,
+		) {
 			element.addEventListener(eventName, (event: Event) => {
 				try {
 					// Create context object
@@ -935,7 +1090,10 @@ export default (options: ComponentOptions) => {
 					// If the expression returns a value, it can be used for two-way binding
 					return result
 				} catch (err) {
-					console.error(`Error executing expression handler: ${handlerValue}`, err)
+					console.error(
+						`Error executing expression handler: ${handlerValue}`,
+						err,
+					)
 				}
 			})
 		}
@@ -959,7 +1117,12 @@ export default (options: ComponentOptions) => {
 		}
 
 		// Set up attribute binding
-		private _setupAttributeBinding(element: Element, attrName: string, expr: string, template: string) {
+		private _setupAttributeBinding(
+			element: Element,
+			attrName: string,
+			expr: string,
+			template: string,
+		) {
 			// Initialize attribute value
 			const value = this._getNestedState(expr)
 
@@ -977,21 +1140,20 @@ export default (options: ComponentOptions) => {
 				element,
 				attrName,
 				expr,
-				template
+				template,
 			})
 		}
 
 		// Get nested state value
-		private _getNestedState(path: string): any {
+		private _getNestedState(path: string): unknown {
 			// Handle nested paths, such as "profile.name"
 			const parts = path.split('.')
 			let result = this._states
 
 			for (const part of parts) {
-				if (result === undefined || result === null) {
+				if (result === undefined || result === null)
 					return undefined
-				}
-				result = result[part]
+				result = (result as { [key: string]: Record<string, unknown> })[part]
 			}
 
 			return result
@@ -1009,31 +1171,33 @@ export default (options: ComponentOptions) => {
 			return ['data-attribute']
 		}
 
-		attributeChangedCallback(attrName: string, oldValue: string, newValue: string) {
+		attributeChangedCallback(
+			attrName: string,
+			oldValue: string,
+			newValue: string,
+		) {
 			if (onAttributeChanged) onAttributeChanged(attrName, oldValue, newValue)
 		}
 
 		// state manager
-		setState(keyPath: string, value: any) {
+		setState(keyPath: string, value: unknown) {
 			this._states[keyPath] = value
 		}
 
-		getState(keyPath: string): any {
+		getState(keyPath: string): unknown {
 			const parts = keyPath.split('.')
 			let result = this._states
 			for (const part of parts) {
-				if (result === undefined || result === null) {
+				if (result === undefined || result === null)
 					return undefined
-				}
-				result = result[part]
+				result = (result as { [key: string]: Record<string, unknown> })[part]
 			}
 			return result
 		}
 
 		// function trigger
-		triggerFunc(eventName: string, ...args: any[]) {
-			if (funcs && funcs[eventName])
-				funcs[eventName].call(this, ...args)
+		triggerFunc(eventName: string, ...args: unknown[]) {
+			funcs?.[eventName]?.call(this, ...args)
 		}
 	}
 
