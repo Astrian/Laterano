@@ -447,12 +447,11 @@ export default (options: ComponentOptions) => {
 			this._evaluateIfCondition(element, expr)
 
 			const statePaths = this._extractStatePathsFromExpression(expr)
-			statePaths.forEach((path) => {
-				if (!this._stateToElementsMap[path]) {
+			for (const path of statePaths) {
+				if (!this._stateToElementsMap[path])
 					this._stateToElementsMap[path] = new Set()
-				}
 				this._stateToElementsMap[path].add(element as HTMLElement)
-			})
+			}
 		}
 
 		// Handle list rendering (%for macro)
@@ -504,26 +503,23 @@ export default (options: ComponentOptions) => {
 				}
 
 				// Detach all currently rendered DOM items managed by this instance.
-				renderedItems.forEach((item) => {
-					if (item.element.parentNode === parentNode) {
+				for (const item of renderedItems)
+					if (item.element.parentNode === parentNode)
 						parentNode.removeChild(item.element)
-					}
-				})
 
 				// Get key attribute if available
 				const keyAttr = template.getAttribute('%key')
 				if (!keyAttr)
 					console.warn(
-						`%key attribute not found in the template, which is not a recommended practice.`,
+						'%key attribute not found in the template, which is not a recommended practice.'
 					)
 
 				// Store a map of existing items by key for reuse
 				const existingElementsByKey = new Map()
-				renderedItems.forEach((item) => {
-					if (item.key !== undefined) {
+				// renderedItems.forEach((item) => {
+				for (const item of renderedItems)
+					if (item.key !== undefined)
 						existingElementsByKey.set(item.key, item)
-					}
-				})
 
 				// Clear rendered items
 				renderedItems.length = 0
@@ -595,20 +591,19 @@ export default (options: ComponentOptions) => {
 				placeholder.parentNode?.insertBefore(fragment, placeholder.nextSibling)
 
 				// Remove any remaining unused items
-				existingElementsByKey.forEach((item) => {
-					if (item.element.parentNode) {
+				// existingElementsByKey.forEach((item) => {
+				for (const item of existingElementsByKey.values())
+					if (item.element.parentNode)
 						item.element.parentNode.removeChild(item.element)
-					}
-				})
 			}
 
 			// Initial render
 			updateList()
 
 			// Set up state dependency for collection changes
-			if (!this._stateToElementsMap[collectionExpr]) {
+			if (!this._stateToElementsMap[collectionExpr])
 				this._stateToElementsMap[collectionExpr] = new Set()
-			}
+
 			// Using a unique identifier for this list rendering instance
 			const listVirtualElement = document.createElement('div')
 			this._stateToElementsMap[collectionExpr].add(
@@ -651,14 +646,14 @@ export default (options: ComponentOptions) => {
 			}
 
 			// Process the text nodes of the element itself
-			Array.from(element.childNodes).forEach((node) => {
-				if (node.nodeType === Node.TEXT_NODE) {
+			// Array.from(element.childNodes).forEach((node) => {
+			for (const node of Array.from(element.childNodes))
+				if (node.nodeType === Node.TEXT_NODE)
 					processTextNodes(node)
-				}
-			})
 
 			// 3. Process attribute bindings (:attr)
-			Array.from(element.attributes).forEach((attr) => {
+			// Array.from(element.attributes).forEach((attr) => {
+			for (const attr of Array.from(element.attributes)) {
 				if (attr.name.startsWith(':')) {
 					const attrName = attr.name.substring(1)
 					const expr = attr.value.trim()
@@ -667,17 +662,17 @@ export default (options: ComponentOptions) => {
 						itemContext,
 					)
 
-					if (value !== undefined) {
+					if (value !== undefined)
 						element.setAttribute(attrName, String(value))
-					}
 
 					// Remove the original binding attribute (execute only for cloned templates once)
 					element.removeAttribute(attr.name)
 				}
-			})
+			}
 
 			// 4. Process event bindings (@event)
-			Array.from(element.attributes).forEach((attr) => {
+			// Array.from(element.attributes).forEach((attr) => {
+			for (const attr of Array.from(element.attributes)) {
 				if (attr.name.startsWith('@')) {
 					const eventName = attr.name.substring(1)
 					const handlerValue = attr.value.trim()
@@ -707,13 +702,14 @@ export default (options: ComponentOptions) => {
 						}
 					})
 				}
-			})
+			}
 
 			// 5. Process conditional rendering (%if)
 			let isConditional = false
 			let shouldDisplay = true
 
-			Array.from(element.attributes).forEach((attr) => {
+			// Array.from(element.attributes).forEach((attr) => {
+			for (const attr of Array.from(element.attributes)) {
 				if (attr.name === '%if') {
 					isConditional = true
 					const expr = attr.value.trim()
@@ -729,9 +725,10 @@ export default (options: ComponentOptions) => {
 					shouldDisplay = Boolean(result)
 
 					// Apply the condition (in the list item context, we use display style to simplify)
-					if (!shouldDisplay) (element as HTMLElement).style.display = 'none'
+					if (!shouldDisplay)
+						(element as HTMLElement).style.display = 'none'
 				}
-			})
+			}
 
 			// If the condition evaluates to false, skip further processing of this element
 			if (isConditional && !shouldDisplay) {
@@ -741,7 +738,8 @@ export default (options: ComponentOptions) => {
 			// 6. Process nested list rendering (%for)
 			let hasForDirective = false
 
-			Array.from(element.attributes).forEach((attr) => {
+			// Array.from(element.attributes).forEach((attr) => {
+			for (const attr of Array.from(element.attributes)) {
 				if (attr.name === '%for') {
 					hasForDirective = true
 					const forExpr = attr.value.trim()
@@ -753,17 +751,16 @@ export default (options: ComponentOptions) => {
 					// Note: We need to evaluate the collection expression through the current item context here
 					this._setupNestedListRendering(element, forExpr, itemContext)
 				}
-			})
-
-			// If this element is a list element, skip child element processing (they will be processed by the list processor)
-			if (hasForDirective) {
-				return
 			}
 
+			// If this element is a list element, skip child element processing (they will be processed by the list processor)
+			if (hasForDirective)
+				return
+
 			// 7. Recursively process all child elements
-			Array.from(element.children).forEach((child) => {
+			// Array.from(element.children).forEach((child) => {
+			for (const child of Array.from(element.children))
 				this._processElementWithItemContext(child, itemContext)
-			})
 		}
 
 		// Set up nested list rendering
@@ -851,15 +848,14 @@ export default (options: ComponentOptions) => {
 				}
 
 				// Check if the expression is an item property path
-				if (itemVar && expression.startsWith(itemVar + '.')) {
+				if (itemVar && expression.startsWith(`${itemVar}.`)) {
 					const propertyPath = expression.substring(itemVar.length + 1)
 					const parts = propertyPath.split('.')
 					let value = itemContext[itemVar]
 
 					for (const part of parts) {
-						if (value === undefined || value === null) {
+						if (value === undefined || value === null)
 							return undefined
-						}
 						value = value[part]
 					}
 
@@ -959,11 +955,9 @@ export default (options: ComponentOptions) => {
 						throw new Error(`Invalid arrow function syntax: ${handlerValue}`)
 					}
 					const paramsStr = (() => {
-						if (splitted[0].includes('(')) {
+						if (splitted[0].includes('('))
 							return splitted[0].trim()
-						} else {
-							return `(${splitted[0].trim()})`
-						}
+						return `(${splitted[0].trim()})`
 					})()
 					const bodyStr = splitted[1].trim()
 
@@ -1033,16 +1027,14 @@ export default (options: ComponentOptions) => {
 			}
 
 			// Add all methods of the component
-			Object.getOwnPropertyNames(Object.getPrototypeOf(this)).forEach(
-				(name) => {
-					if (
-						typeof (this as any)[name] === 'function' &&
-						name !== 'constructor'
-					) {
-						context[name] = (this as any)[name].bind(this)
-					}
-				},
-			)
+			// Object.getOwnPropertyNames(Object.getPrototypeOf(this)).forEach(
+			// 	(name) => {
+			for (const name of Object.getOwnPropertyNames(Object.getPrototypeOf(this)))
+				if (
+					typeof (this as any)[name] === 'function' &&
+					name !== 'constructor'
+				)
+					context[name] = (this as any)[name].bind(this)
 
 			return context
 		}
@@ -1198,9 +1190,8 @@ export default (options: ComponentOptions) => {
 			const parts = keyPath.split('.')
 			let result = this._states
 			for (const part of parts) {
-				if (result === undefined || result === null) {
+				if (result === undefined || result === null)
 					return undefined
-				}
 				result = result[part]
 			}
 			return result
@@ -1208,7 +1199,7 @@ export default (options: ComponentOptions) => {
 
 		// function trigger
 		triggerFunc(eventName: string, ...args: any[]) {
-			if (funcs && funcs[eventName]) funcs[eventName].call(this, ...args)
+			funcs?.[eventName]?.call(this, ...args)
 		}
 	}
 
