@@ -38,7 +38,7 @@ export default (options: ComponentOptions) => {
 		private _states: Record<string, any> = {}
 		private _stateToElementsMap: Record<string, Set<HTMLElement>> = {}
 		private _currentRenderingElement: HTMLElement | null = null
-		private _statesListeners: Record<string, Function> = {}
+		private _statesListeners: Record<string, (...args: any[]) => void> = {}
 		private _textBindings: Array<{
 			node: Text
 			expr: string
@@ -69,9 +69,9 @@ export default (options: ComponentOptions) => {
 					set: (target: Record<string, any>, keyPath: string, value: any) => {
 						const valueRoute = keyPath.split('.')
 						let currentTarget = target
-						for (let i in valueRoute) {
+						for (const i in valueRoute) {
 							const key = valueRoute[i]
-							if (parseInt(i) === valueRoute.length - 1) {
+							if (Number.parseInt(i) === valueRoute.length - 1) {
 								currentTarget[key] = value
 							} else {
 								if (!currentTarget[key]) {
@@ -110,9 +110,9 @@ export default (options: ComponentOptions) => {
 
 						const valueRoute = keyPath.split('.')
 						let currentTarget = target
-						for (let i in valueRoute) {
+						for (const i in valueRoute) {
 							const key = valueRoute[i]
-							if (parseInt(i) === valueRoute.length - 1) {
+							if (Number.parseInt(i) === valueRoute.length - 1) {
 								return currentTarget[key]
 							} else {
 								if (!currentTarget[key]) {
@@ -533,12 +533,12 @@ export default (options: ComponentOptions) => {
 					// Determine the key for this item
 					const key = keyAttr
 						? this._evaluateExpressionWithItemContext(
-								keyAttr ?? '',
-								item,
-								index,
-								itemVar,
-								indexVar ? indexVar : undefined,
-							)
+							keyAttr ?? '',
+							item,
+							index,
+							itemVar,
+							indexVar ? indexVar : undefined,
+						)
 						: index
 
 					// Check if we can reuse an existing element
@@ -624,7 +624,7 @@ export default (options: ComponentOptions) => {
 			itemContext: Record<string, any>,
 		) {
 			// 1. Store the item context of the element so that subsequent updates can find it
-			;(element as any)._itemContext = itemContext
+			; (element as any)._itemContext = itemContext
 
 			// 2. Process bindings in text nodes
 			const processTextNodes = (node: Node) => {
