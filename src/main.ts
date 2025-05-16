@@ -66,7 +66,11 @@ export default (options: ComponentOptions) => {
 			this._states = new Proxy(
 				{ ...(states || {}) },
 				{
-					set: (target: Record<string, unknown>, keyPath: string, value: unknown) => {
+					set: (
+						target: Record<string, unknown>,
+						keyPath: string,
+						value: unknown,
+					) => {
 						const valueRoute = keyPath.split('.')
 						let currentTarget = target
 						for (const i in valueRoute) {
@@ -74,8 +78,7 @@ export default (options: ComponentOptions) => {
 							if (Number.parseInt(i) === valueRoute.length - 1) {
 								currentTarget[key] = value
 							} else {
-								if (!currentTarget[key])
-									currentTarget[key] = {}
+								if (!currentTarget[key]) currentTarget[key] = {}
 								currentTarget = currentTarget[key] as Record<string, unknown>
 							}
 						}
@@ -113,8 +116,7 @@ export default (options: ComponentOptions) => {
 							if (Number.parseInt(i) === valueRoute.length - 1)
 								return currentTarget[key]
 
-							if (!currentTarget[key])
-								currentTarget[key] = {}
+							if (!currentTarget[key]) currentTarget[key] = {}
 							currentTarget = currentTarget[key] as Record<string, unknown>
 						}
 						return undefined
@@ -192,19 +194,19 @@ export default (options: ComponentOptions) => {
 						if (value !== undefined)
 							binding.element.setAttribute(binding.attrName, String(value))
 					}
-
 			}
 		}
 
 		private _scheduleUpdate(elements: Set<HTMLElement>) {
 			requestAnimationFrame(() => {
-				for (const element of elements)
-					this._updateElement(element)
+				for (const element of elements) this._updateElement(element)
 			})
 		}
 
 		private _updateElement(element: HTMLElement) {
-			const renderFunction = (element as { _renderFunction?: () => string | Node })._renderFunction
+			const renderFunction = (
+				element as { _renderFunction?: () => string | Node }
+			)._renderFunction
 			if (renderFunction) {
 				// Set rendering context
 				this._currentRenderingElement = element
@@ -213,8 +215,7 @@ export default (options: ComponentOptions) => {
 				const result = renderFunction()
 
 				// Update DOM
-				if (typeof result === 'string')
-					element.innerHTML = result
+				if (typeof result === 'string') element.innerHTML = result
 				else if (result instanceof Node) {
 					element.innerHTML = ''
 					element.appendChild(result)
@@ -349,11 +350,19 @@ export default (options: ComponentOptions) => {
 								eventName,
 								handlerValue,
 							)
-						} else if (typeof (this as Record<string, unknown>)[handlerValue] === 'function') {
+						} else if (
+							typeof (this as Record<string, unknown>)[handlerValue] ===
+							'function'
+						) {
 							// Handle method reference: @click="handleClick"
 							currentElementNode.addEventListener(
 								eventName,
-								((this as unknown as Record<string, (...args: unknown[]) => void>)[handlerValue]).bind(this),
+								(
+									this as unknown as Record<
+										string,
+										(...args: unknown[]) => void
+									>
+								)[handlerValue].bind(this),
 							)
 						} else {
 							// Handle simple expression: @click="count++" or @input="name = $event.target.value"
@@ -427,8 +436,7 @@ export default (options: ComponentOptions) => {
 			this._statesListeners[expr] = (newValue: unknown) => {
 				if (element instanceof HTMLInputElement)
 					element.value = newValue as string
-				else
-					element.setAttribute('data-laterano-connect', String(newValue))
+				else element.setAttribute('data-laterano-connect', String(newValue))
 			}
 		}
 
@@ -510,15 +518,14 @@ export default (options: ComponentOptions) => {
 				const keyAttr = template.getAttribute('%key')
 				if (!keyAttr)
 					console.warn(
-						'%key attribute not found in the template, which is not a recommended practice.'
+						'%key attribute not found in the template, which is not a recommended practice.',
 					)
 
 				// Store a map of existing items by key for reuse
 				const existingElementsByKey = new Map()
 				// renderedItems.forEach((item) => {
 				for (const item of renderedItems)
-					if (item.key !== undefined)
-						existingElementsByKey.set(item.key, item)
+					if (item.key !== undefined) existingElementsByKey.set(item.key, item)
 
 				// Clear rendered items
 				renderedItems.length = 0
@@ -531,12 +538,12 @@ export default (options: ComponentOptions) => {
 					// Determine the key for this item
 					const key = keyAttr
 						? this._evaluateExpressionWithItemContext(
-							keyAttr ?? '',
-							item,
-							index,
-							itemVar,
-							indexVar ? indexVar : undefined,
-						)
+								keyAttr ?? '',
+								item,
+								index,
+								itemVar,
+								indexVar ? indexVar : undefined,
+							)
 						: index
 
 					// Check if we can reuse an existing element
@@ -621,7 +628,8 @@ export default (options: ComponentOptions) => {
 			itemContext: Record<string, unknown>,
 		) {
 			// 1. Store the item context of the element so that subsequent updates can find it
-			; (element as { _itemContext?: Record<string, unknown> })._itemContext = itemContext
+			;(element as { _itemContext?: Record<string, unknown> })._itemContext =
+				itemContext
 
 			// 2. Process bindings in text nodes
 			const processTextNodes = (node: Node) => {
@@ -647,8 +655,7 @@ export default (options: ComponentOptions) => {
 			// Process the text nodes of the element itself
 			// Array.from(element.childNodes).forEach((node) => {
 			for (const node of Array.from(element.childNodes))
-				if (node.nodeType === Node.TEXT_NODE)
-					processTextNodes(node)
+				if (node.nodeType === Node.TEXT_NODE) processTextNodes(node)
 
 			// 3. Process attribute bindings (:attr)
 			// Array.from(element.attributes).forEach((attr) => {
@@ -661,8 +668,7 @@ export default (options: ComponentOptions) => {
 						itemContext,
 					)
 
-					if (value !== undefined)
-						element.setAttribute(attrName, String(value))
+					if (value !== undefined) element.setAttribute(attrName, String(value))
 
 					// Remove the original binding attribute (execute only for cloned templates once)
 					element.removeAttribute(attr.name)
@@ -724,8 +730,7 @@ export default (options: ComponentOptions) => {
 					shouldDisplay = Boolean(result)
 
 					// Apply the condition (in the list item context, we use display style to simplify)
-					if (!shouldDisplay)
-						(element as HTMLElement).style.display = 'none'
+					if (!shouldDisplay) (element as HTMLElement).style.display = 'none'
 				}
 			}
 
@@ -753,8 +758,7 @@ export default (options: ComponentOptions) => {
 			}
 
 			// If this element is a list element, skip child element processing (they will be processed by the list processor)
-			if (hasForDirective)
-				return
+			if (hasForDirective) return
 
 			// 7. Recursively process all child elements
 			// Array.from(element.children).forEach((child) => {
@@ -853,9 +857,8 @@ export default (options: ComponentOptions) => {
 					let value = itemContext[itemVar]
 
 					for (const part of parts) {
-						if (value === undefined || value === null)
-							return undefined
-						value = (value as { [key: string]: unknown})[part]
+						if (value === undefined || value === null) return undefined
+						value = (value as { [key: string]: unknown })[part]
 					}
 
 					return value
@@ -954,8 +957,7 @@ export default (options: ComponentOptions) => {
 						throw new Error(`Invalid arrow function syntax: ${handlerValue}`)
 					}
 					const paramsStr = (() => {
-						if (splitted[0].includes('('))
-							return splitted[0].trim()
+						if (splitted[0].includes('(')) return splitted[0].trim()
 						return `(${splitted[0].trim()})`
 					})()
 					const bodyStr = splitted[1].trim()
@@ -1028,12 +1030,16 @@ export default (options: ComponentOptions) => {
 			// Add all methods of the component
 			// Object.getOwnPropertyNames(Object.getPrototypeOf(this)).forEach(
 			// 	(name) => {
-			for (const name of Object.getOwnPropertyNames(Object.getPrototypeOf(this)))
+			for (const name of Object.getOwnPropertyNames(
+				Object.getPrototypeOf(this),
+			))
 				if (
 					typeof (this as Record<string, unknown>)[name] === 'function' &&
 					name !== 'constructor'
 				)
-					context[name] = (this as unknown as Record<string, (...args: unknown[]) => void>)[name].bind(this)
+					context[name] = (
+						this as unknown as Record<string, (...args: unknown[]) => void>
+					)[name].bind(this)
 
 			return context
 		}
@@ -1151,8 +1157,7 @@ export default (options: ComponentOptions) => {
 			let result = this._states
 
 			for (const part of parts) {
-				if (result === undefined || result === null)
-					return undefined
+				if (result === undefined || result === null) return undefined
 				result = (result as { [key: string]: Record<string, unknown> })[part]
 			}
 
@@ -1188,8 +1193,7 @@ export default (options: ComponentOptions) => {
 			const parts = keyPath.split('.')
 			let result = this._states
 			for (const part of parts) {
-				if (result === undefined || result === null)
-					return undefined
+				if (result === undefined || result === null) return undefined
 				result = (result as { [key: string]: Record<string, unknown> })[part]
 			}
 			return result
