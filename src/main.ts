@@ -156,7 +156,6 @@ export default (options: ComponentOptions) => {
 				setupArrowFunctionHandler: this._setupArrowFunctionHandler.bind(this),
 				setupFunctionCallHandler: this._setupFunctionCallHandler.bind(this),
 				setupExpressionHandler: this._setupExpressionHandler.bind(this),
-				setupTwoWayBinding: this._setupTwoWayBinding.bind(this),
 				setupConditionRendering: this._setupConditionRendering.bind(this),
 				setupListRendering: this._setupListRendering.bind(this),
 				stateToElementsMap: this._stateToElementsMap,
@@ -168,6 +167,7 @@ export default (options: ComponentOptions) => {
 						typeof (this as Record<string, unknown>)[name] === 'function' &&
 						name !== 'constructor',
 				),
+				stateListeners: this._statesListeners,
 			})
 		}
 
@@ -197,36 +197,6 @@ export default (options: ComponentOptions) => {
 
 				// Clear rendering context
 				this._currentRenderingElement = null
-			}
-		}
-
-		// Handle two-way data binding (%connect macro)
-		private _setupTwoWayBinding(element: Element, expr: string) {
-			// Get the initial value
-			const value = this._getNestedState(expr)
-
-			// Set the initial value
-			if (value !== undefined)
-				element.setAttribute('data-laterano-connect', String(value))
-			else
-				console.error(
-					`State \`${expr}\` not found in the component state. Although Laterano will try to work with it, it may has potentially unexpected behavior.`,
-				)
-
-			// Add event listener for input events
-			element.addEventListener('input', (event: Event) => {
-				const target = event.target as HTMLInputElement
-				const newValue = target.value
-
-				// Update the state
-				this.setState(expr, newValue)
-			})
-
-			// Add event listener for state changes
-			this._statesListeners[expr] = (newValue: unknown) => {
-				if (element instanceof HTMLInputElement)
-					element.value = newValue as string
-				else element.setAttribute('data-laterano-connect', String(newValue))
 			}
 		}
 

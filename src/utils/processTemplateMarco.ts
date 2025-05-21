@@ -24,7 +24,6 @@ export default function processTemplateMacros(
 			eventName: string,
 			handlerValue: string,
 		) => void
-		setupTwoWayBinding: (element: Element, expr: string) => void
 		setupConditionRendering: (element: Element, expr: string) => void
 		setupListRendering: (element: Element, expr: string) => void
 		stateToElementsMap: Record<string, Set<HTMLElement>>
@@ -34,6 +33,7 @@ export default function processTemplateMacros(
 			originalContent: string
 		}[]
 		availableFuncs: string[]
+		stateListeners: Record<string, (newValue: unknown) => void>
 	},
 ) {
 	/*
@@ -194,7 +194,11 @@ export default function processTemplateMacros(
 				// Handle different types of macros
 				if (macroName === 'connect')
 					// Handle state connection: %connect="stateName"
-					options.setupTwoWayBinding(currentElementNode, expr)
+					setupTwoWayBinding(currentElementNode, expr, {
+						getNestedState: context.getState.bind(context),
+						setState: context.setState.bind(context),
+						statesListeners: options.stateListeners,
+					})
 				else if (macroName === 'if') {
 					ifDirectivesToProcess.push({ element: currentElementNode, expr })
 				} else if (macroName === 'for')
@@ -211,5 +215,42 @@ export default function processTemplateMacros(
 	// Process all collected %if directives after the main traversal
 	for (const { element: ifElement, expr } of ifDirectivesToProcess) {
 		options.setupConditionRendering(ifElement, expr)
+	}
+}
+
+// Handle two-way data binding (%connect macro)
+function setupTwoWayBinding(
+	element: Element,
+	expr: string,
+	ops: {
+		getNestedState: (path: string) => unknown
+		setState: (path: string, value: unknown) => void
+		statesListeners: Record<string, (newValue: unknown) => void>
+	},
+) {
+	// Get the initial value
+	const value = ops.getNestedState(expr)
+
+	// Set the initial value
+	if (value !== undefined)
+		element.setAttribute('data-laterano-connect', String(value))
+	else
+		console.error(
+			`State \`${expr}\` not found in the component state. Although Laterano will try to work with it, it may has potentially unexpected behavior.`,
+		)
+
+	// Add event listener for input events
+	element.addEventListener('input', (event: Event) => {
+		const target = event.target as HTMLInputElement
+		const newValue = target.value
+
+		// Update the state
+		ops.setState(expr, newValue)
+	})
+
+	// Add event listener for state changes
+	ops.statesListeners[expr] = (newValue: unknown) => {
+		if (element instanceof HTMLInputElement) element.value = newValue as string
+		else element.setAttribute('data-laterano-connect', String(newValue))
 	}
 }
