@@ -1,4 +1,4 @@
-export function processTemplateMacros(
+export default function processTemplateMacros(
 	element: Element,
 	context: CustomElement,
 	options: {

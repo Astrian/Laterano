@@ -1,4 +1,4 @@
-export function parseTemplate(template: string): Element {
+export default function parseTemplate(template: string): Element {
 	const parser = new DOMParser()
 	const doc = parser.parseFromString(template, 'text/html')
 

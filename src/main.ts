@@ -59,7 +59,7 @@ export default (options: ComponentOptions) => {
 		constructor() {
 			super()
 
-			// initialize dom tree and append to shadow root
+			// initialize dom tree and append to shadow root, as well as initialize state
 			this._initialize()
 		}
 
@@ -85,7 +85,14 @@ export default (options: ComponentOptions) => {
 							}
 						}
 						// trigger dom updates
-						this._triggerDomUpdates(keyPath)
+						utils.triggerDomUpdates(keyPath, {
+							stateToElementsMap: this._stateToElementsMap,
+							textBindings: this._textBindings,
+							attributeBindings: this._attributeBindings,
+							updateTextNode: this._updateTextNode.bind(this),
+							getNestedState: this._getNestedState.bind(this),
+							scheduleUpdate: this._scheduleUpdate.bind(this),
+						})
 						if (this._statesListeners[keyPath])
 							this._statesListeners[keyPath](value)
 
@@ -160,45 +167,6 @@ export default (options: ComponentOptions) => {
 			})
 		}
 
-		private _triggerDomUpdates(keyPath: string) {
-			if (this._stateToElementsMap[keyPath]) {
-				const updateQueue = new Set<HTMLElement>()
-
-				for (const element of this._stateToElementsMap[keyPath]) {
-					updateQueue.add(element)
-				}
-
-				this._scheduleUpdate(updateQueue)
-			}
-
-			// Update text bindings that depend on this state
-			if (this._textBindings) {
-				// this._textBindings.forEach((binding) => {
-				for (const binding of this._textBindings)
-					if (
-						binding.expr === keyPath ||
-						binding.expr.startsWith(`${keyPath}.`)
-					)
-						this._updateTextNode(
-							binding.node,
-							binding.expr,
-							binding.originalContent,
-						)
-			}
-
-			// Update attribute bindings that depend on this state
-			if (this._attributeBindings) {
-				for (const binding of this._attributeBindings)
-					if (
-						binding.expr === keyPath ||
-						binding.expr.startsWith(`${keyPath}.`)
-					) {
-						const value = this._getNestedState(binding.expr)
-						if (value !== undefined)
-							binding.element.setAttribute(binding.attrName, String(value))
-					}
-			}
-		}
 
 		private _scheduleUpdate(elements: Set<HTMLElement>) {
 			requestAnimationFrame(() => {
