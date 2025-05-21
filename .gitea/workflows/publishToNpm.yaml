@@ -24,7 +24,6 @@ jobs:
     outputs:
       status: ${{ job.status }}
     
-    
   quality-failed-webhook:
     needs: quality
     runs-on: ubuntu-latest
@@ -45,7 +44,6 @@ jobs:
           echo "https://bark.nas.astrian.moe/${{ secrets.BARK_TOKEN }}/${ENCODED_TITLE}/${ENCODED_MESSAGE}?group=${ENCODED_GROUP}"
 
           curl -X GET "https://bark.nas.astrian.moe/${{ secrets.BARK_TOKEN }}/${ENCODED_TITLE}/${ENCODED_MESSAGE}?group=${ENCODED_GROUP}"
-
 
   publish:
     runs-on: ubuntu-latest
@@ -98,7 +96,7 @@ jobs:
           PACKAGE_NAME="${{ steps.package_name.outputs.PACKAGE_NAME }}"
           MSG_GROUP="Laterano CI/CD"
           MSG_TITLE="Package Published"
-          MSG_MESSAGE="Package $PACKAGE_NAME has been published to npm with version $VERSION_CODE"
+          MSG_MESSAGE="Branch ${{ gitea.ref }}: published to npm with version $VERSION_CODE"
           
           # URL-encode the message
           ENCODED_MESSAGE=$(echo "$MSG_MESSAGE" | sed 's/%/%25/g' | sed 's/ /%20/g' | sed 's/!/%21/g' | sed 's/"/%22/g' | sed 's/#/%23/g' | sed 's/\$/%24/g' | sed 's/&/%26/g' | sed 's/'"'"'/%27/g' | sed 's/(/%28/g' | sed 's/)/%29/g' | sed 's/\*/%2A/g' | sed 's/+/%2B/g' | sed 's/,/%2C/g' | sed 's/\//%2F/g' | sed 's/:/%3A/g' | sed 's/;/%3B/g' | sed 's/=/%3D/g' | sed 's/?/%3F/g' | sed 's/@/%40/g')
