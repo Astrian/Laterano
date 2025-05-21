@@ -1,3 +1,5 @@
+import { parseTemplate } from './utils/parseTemplate'
+
 interface ComponentOptions {
 	tag: string
 	template: string
@@ -57,6 +59,11 @@ export default (options: ComponentOptions) => {
 		constructor() {
 			super()
 
+			// initialize dom tree and append to shadow root
+			this._initialize()
+		}
+
+		private _initState() {
 			// copy state from options
 			this._states = new Proxy(
 				{ ...(states || {}) },
@@ -118,12 +125,12 @@ export default (options: ComponentOptions) => {
 					},
 				},
 			)
-
-			// initialize dom tree and append to shadow root
-			this._initialize()
 		}
 
 		private _initialize() {
+			// initialize state
+			this._initState()
+
 			// initialize shadow dom
 			const shadow = this.attachShadow({ mode: 'open' })
 
@@ -133,21 +140,8 @@ export default (options: ComponentOptions) => {
 				this.shadowRoot?.appendChild(styleElement)
 			}
 
-			const parser = new DOMParser()
-			const doc = parser.parseFromString(template, 'text/html')
-
-			const mainContent = doc.body.firstElementChild
-			let rootElement: Element
-
-			if (mainContent) {
-				rootElement = document.importNode(mainContent, true)
-				shadow.appendChild(rootElement)
-			} else {
-				const container = document.createElement('div')
-				container.innerHTML = template
-				rootElement = container
-				shadow.appendChild(container)
-			}
+			const rootElement = parseTemplate(template)
+			shadow.appendChild(rootElement)
 
 			this._processTemplateMacros(rootElement)
 		}
