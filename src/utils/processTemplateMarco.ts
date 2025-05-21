@@ -24,7 +24,6 @@ export default function processTemplateMacros(
 			eventName: string,
 			handlerValue: string,
 		) => void
-		setupConditionRendering: (element: Element, expr: string) => void
 		setupListRendering: (element: Element, expr: string) => void
 		stateToElementsMap: Record<string, Set<HTMLElement>>
 		textBindings: {
@@ -34,6 +33,12 @@ export default function processTemplateMacros(
 		}[]
 		availableFuncs: string[]
 		stateListeners: Record<string, (newValue: unknown) => void>
+		conditionalElements: Map<
+			Element,
+			{ expr: string; placeholder: Comment; isPresent: boolean }
+		>
+		evaluateIfCondition: (element: Element, expr: string) => void
+		extractStatePathsFromExpression: (expr: string) => string[]
 	},
 ) {
 	/*
@@ -214,7 +219,12 @@ export default function processTemplateMacros(
 
 	// Process all collected %if directives after the main traversal
 	for (const { element: ifElement, expr } of ifDirectivesToProcess) {
-		options.setupConditionRendering(ifElement, expr)
+		setupConditionRendering(ifElement, expr, {
+			conditionalElements: options.conditionalElements,
+			evaluateIfCondition: options.evaluateIfCondition.bind(context),
+			extractStatePathsFromExpression: options.extractStatePathsFromExpression,
+			stateToElementsMap: options.stateToElementsMap,
+		})
 	}
 }
 
@@ -252,5 +262,37 @@ function setupTwoWayBinding(
 	ops.statesListeners[expr] = (newValue: unknown) => {
 		if (element instanceof HTMLInputElement) element.value = newValue as string
 		else element.setAttribute('data-laterano-connect', String(newValue))
+	}
+}
+
+// Handle condition rendering (%if macro)
+function setupConditionRendering(
+	element: Element,
+	expr: string,
+	ops: {
+		conditionalElements: Map<
+			Element,
+			{ expr: string; placeholder: Comment; isPresent: boolean }
+		>
+		evaluateIfCondition: (element: Element, expr: string) => void
+		extractStatePathsFromExpression: (expr: string) => string[]
+		stateToElementsMap: Record<string, Set<HTMLElement>>
+	},
+) {
+	const placeholder = document.createComment(` %if: ${expr} `)
+	element.parentNode?.insertBefore(placeholder, element)
+
+	ops.conditionalElements.set(element, {
+		expr,
+		placeholder,
+		isPresent: true,
+	})
+
+	ops.evaluateIfCondition(element, expr)
+
+	const statePaths = ops.extractStatePathsFromExpression(expr)
+	for (const path of statePaths) {
+		if (!ops.stateToElementsMap[path]) ops.stateToElementsMap[path] = new Set()
+		ops.stateToElementsMap[path].add(element as HTMLElement)
 	}
 }

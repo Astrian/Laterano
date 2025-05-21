@@ -156,7 +156,6 @@ export default (options: ComponentOptions) => {
 				setupArrowFunctionHandler: this._setupArrowFunctionHandler.bind(this),
 				setupFunctionCallHandler: this._setupFunctionCallHandler.bind(this),
 				setupExpressionHandler: this._setupExpressionHandler.bind(this),
-				setupConditionRendering: this._setupConditionRendering.bind(this),
 				setupListRendering: this._setupListRendering.bind(this),
 				stateToElementsMap: this._stateToElementsMap,
 				textBindings: this._textBindings,
@@ -168,6 +167,10 @@ export default (options: ComponentOptions) => {
 						name !== 'constructor',
 				),
 				stateListeners: this._statesListeners,
+				conditionalElements: this._conditionalElements,
+				evaluateIfCondition: this._evaluateIfCondition.bind(this),
+				extractStatePathsFromExpression:
+					this._extractStatePathsFromExpression.bind(this),
 			})
 		}
 
@@ -197,27 +200,6 @@ export default (options: ComponentOptions) => {
 
 				// Clear rendering context
 				this._currentRenderingElement = null
-			}
-		}
-
-		// Handle condition rendering (%if macro)
-		private _setupConditionRendering(element: Element, expr: string) {
-			const placeholder = document.createComment(` %if: ${expr} `)
-			element.parentNode?.insertBefore(placeholder, element)
-
-			this._conditionalElements.set(element, {
-				expr,
-				placeholder,
-				isPresent: true,
-			})
-
-			this._evaluateIfCondition(element, expr)
-
-			const statePaths = this._extractStatePathsFromExpression(expr)
-			for (const path of statePaths) {
-				if (!this._stateToElementsMap[path])
-					this._stateToElementsMap[path] = new Set()
-				this._stateToElementsMap[path].add(element as HTMLElement)
 			}
 		}
 
