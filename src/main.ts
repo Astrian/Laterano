@@ -340,11 +340,11 @@ export default (options: ComponentOptions) => {
 		}
 
 		// Update text node
-		private _updateTextNode(node: Text, expr: string, template: string) {
+		private _updateTextNode(node: Text, _expr: string, template: string) {
 			// Replace all expressions with the current state value
 			let newContent = template
 
-			const replaceExpr = (match: string, expr: string) => {
+			const replaceExpr = (_match: string, expr: string) => {
 				// Get the value of the expression
 				const value = this._getNestedState(expr.trim())
 				return value !== undefined ? String(value) : ''
