@@ -54,7 +54,8 @@ export default (options: ComponentOptions) => {
 					stateToElementsMap: this._stateToElementsMap,
 					textBindings: this._textBindings,
 					attributeBindings: this._attributeBindings,
-					updateTextNode: (node: Text, value: string) => this._updateTextNode(node, value, value),
+					updateTextNode: (node: Text, value: string) =>
+						this._updateTextNode(node, value, value),
 					getNestedState: (keyPath: string) => this._getNestedState(keyPath),
 					scheduleUpdate: this._scheduleUpdate.bind(this),
 					statesListenersSelf: this._statesListeners,
@@ -62,7 +63,7 @@ export default (options: ComponentOptions) => {
 					evaluateIfCondition: this._evaluateIfCondition.bind(this),
 				},
 				options.states,
-				options.statesListeners
+				options.statesListeners,
 			)
 
 			// initialize shadow dom

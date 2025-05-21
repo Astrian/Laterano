@@ -1,4 +1,4 @@
-import triggerDomUpdates from "./triggerDomUpdates"
+import triggerDomUpdates from './triggerDomUpdates'
 
 export default function initState(
 	ops: {
@@ -30,7 +30,7 @@ export default function initState(
 		statesListenersSelf: Record<string, (...args: unknown[]) => void>
 	},
 	states?: Record<string, unknown>,
-	statesListeners?: { [key: string]: (value: unknown) => void; } | undefined
+	statesListeners?: { [key: string]: (value: unknown) => void } | undefined,
 ) {
 	console.log(states)
 	// copy state from options
@@ -82,9 +82,7 @@ export default function initState(
 				if (ops.currentRenderingElement) {
 					if (!ops.stateToElementsMap[keyPath])
 						ops.stateToElementsMap[keyPath] = new Set()
-					ops.stateToElementsMap[keyPath].add(
-						ops.currentRenderingElement,
-					)
+					ops.stateToElementsMap[keyPath].add(ops.currentRenderingElement)
 				}
 
 				const valueRoute = keyPath.split('.')
