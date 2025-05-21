@@ -39,6 +39,8 @@ export default function processTemplateMacros(
 		>
 		evaluateIfCondition: (element: Element, expr: string) => void
 		extractStatePathsFromExpression: (expr: string) => string[]
+		states: Record<string, unknown>
+		triggerFunc: (eventName: string, ...args: unknown[]) => void
 	},
 ) {
 	/*
@@ -163,7 +165,7 @@ export default function processTemplateMacros(
 				} else if (
 					options.availableFuncs.includes(handlerValue) &&
 					typeof (context as unknown as Record<string, unknown>)[
-						handlerValue
+					handlerValue
 					] === 'function'
 				) {
 					// Handle method reference: @click="handleClick"
@@ -206,9 +208,17 @@ export default function processTemplateMacros(
 					})
 				else if (macroName === 'if') {
 					ifDirectivesToProcess.push({ element: currentElementNode, expr })
-				} else if (macroName === 'for')
-					options.setupListRendering(currentElementNode, expr)
-				else if (macroName === 'key') continue
+				} else if (macroName === 'for') {
+					const listContext: ListRenderingContext = {
+						states: options.states,
+						stateToElementsMap: options.stateToElementsMap,
+						statesListeners: options.stateListeners,
+						setState: context.setState.bind(context),
+						getState: context.getState.bind(context),
+						triggerFunc: options.triggerFunc.bind(context),
+					}
+					setupListRendering(currentElementNode, expr, listContext)
+				} else if (macroName === 'key') continue
 				else console.warn(`Unknown macro: %${macroName}`)
 			}
 		}
@@ -294,5 +304,441 @@ function setupConditionRendering(
 	for (const path of statePaths) {
 		if (!ops.stateToElementsMap[path]) ops.stateToElementsMap[path] = new Set()
 		ops.stateToElementsMap[path].add(element as HTMLElement)
+	}
+}
+
+// Interface for list rendering context
+interface ListRenderingContext {
+	states: Record<string, unknown>
+	stateToElementsMap: Record<string, Set<HTMLElement>>
+	statesListeners: Record<string, (value: unknown) => void>
+	setState: (keyPath: string, value: unknown) => void
+	getState: (keyPath: string) => unknown
+	triggerFunc: (eventName: string, ...args: unknown[]) => void
+}
+
+// Evaluate expressions using the item context
+function evaluateExpressionWithItemContext(
+	expression: string,
+	itemContext: Record<string, unknown>,
+	context: ListRenderingContext,
+	index?: number,
+	itemVar?: string,
+	indexVar?: string,
+): unknown {
+	try {
+		// Check if the expression directly references the item variable
+		if (itemVar && expression === itemVar) {
+			return itemContext[itemVar]
+		}
+
+		// Check if the expression is an item property path
+		if (itemVar && expression.startsWith(`${itemVar}.`)) {
+			const propertyPath = expression.substring(itemVar.length + 1)
+			const parts = propertyPath.split('.')
+			let value = itemContext[itemVar]
+
+			for (const part of parts) {
+				if (value === undefined || value === null) return undefined
+				value = (value as { [key: string]: unknown })[part]
+			}
+
+			return value
+		}
+
+		// Check if the expression directly references the index variable
+		if (indexVar && expression === indexVar) {
+			return index
+		}
+
+		// Create a merged context (component state + item context)
+		const mergedContext = { ...context.states, ...itemContext }
+
+		// Create a function to evaluate the expression
+		const contextKeys = Object.keys(mergedContext)
+		const contextValues = Object.values(mergedContext)
+
+		// Use the with statement to allow the expression to access all properties in the context
+		const func = new Function(...contextKeys, `return ${expression}`)
+		return func(...contextValues)
+	} catch (error) {
+		console.error(
+			`Error evaluating expression with item context: ${expression}`,
+			error,
+		)
+		return undefined
+	}
+}
+
+// Set up nested list rendering
+function setupNestedListRendering(
+	element: Element,
+	expr: string,
+	parentItemContext: Record<string, unknown>,
+	context: ListRenderingContext,
+) {
+	// Parse the expression (e.g., "subItem in item.subItems")
+	const match = expr.match(/(?:\(([^,]+),\s*([^)]+)\)|([^,\s]+))\s+in\s+(.+)/)
+	if (!match) {
+		console.error(`Invalid nested %for expression: ${expr}`)
+		return
+	}
+
+	// Extract the item variable name, index variable name (optional), and collection expression
+	const itemVar = match[3] || match[1]
+	const indexVar = match[2] || null
+	const collectionExpr = match[4].trim()
+
+	// Evaluate the collection expression, using the parent item context
+	const collection = evaluateExpressionWithItemContext(
+		collectionExpr,
+		parentItemContext,
+		context,
+	)
+
+	if (!collection || !Array.isArray(collection)) {
+		console.warn(
+			`Nested collection "${collectionExpr}" is not an array or does not exist`,
+		)
+		return
+	}
+
+	// Create a placeholder comment
+	const placeholder = document.createComment(` %for: ${expr} `)
+	element.parentNode?.insertBefore(placeholder, element)
+
+	// Remove the original template element from the DOM
+	const template = element.cloneNode(true) as Element
+	element.parentNode?.removeChild(element)
+
+	// Create an element for each item
+	collection.forEach((item, index) => {
+		const itemElement = template.cloneNode(true) as Element
+
+		// Create a nested item context, merging the parent context
+		const nestedItemContext = {
+			...parentItemContext,
+			[itemVar]: item,
+		}
+
+		if (indexVar) {
+			nestedItemContext[indexVar] = index
+		}
+
+		// Recursively process this item and its children
+		processElementWithItemContext(itemElement, nestedItemContext, context)
+
+		// Insert the item element into the DOM
+		placeholder.parentNode?.insertBefore(itemElement, placeholder.nextSibling)
+	})
+}
+
+// Recursively process the element and its children, applying the item context
+function processElementWithItemContext(
+	element: Element,
+	itemContext: Record<string, unknown>,
+	context: ListRenderingContext,
+) {
+	// Store the item context of the element so that subsequent updates can find it
+	; (element as { _itemContext?: Record<string, unknown> })._itemContext =
+		itemContext
+
+	// Process bindings in text nodes
+	const processTextNodes = (node: Node) => {
+		if (node.nodeType === Node.TEXT_NODE) {
+			const textContent = node.textContent || ''
+			if (textContent.includes('{{')) {
+				const textNode = node as Text
+				const updatedContent = textContent.replace(
+					/\{\{\s*([^}]+)\s*\}\}/g,
+					(match, expr) => {
+						const value = evaluateExpressionWithItemContext(
+							expr.trim(),
+							itemContext,
+							context,
+						)
+						return value !== undefined ? String(value) : ''
+					},
+				)
+				textNode.textContent = updatedContent
+			}
+		}
+	}
+
+	// Process the text nodes of the element itself
+	for (const node of Array.from(element.childNodes))
+		if (node.nodeType === Node.TEXT_NODE) processTextNodes(node)
+
+	// Process attribute bindings (:attr)
+	for (const attr of Array.from(element.attributes)) {
+		if (attr.name.startsWith(':')) {
+			const attrName = attr.name.substring(1)
+			const expr = attr.value.trim()
+			const value = evaluateExpressionWithItemContext(
+				expr,
+				itemContext,
+				context,
+			)
+
+			if (value !== undefined) element.setAttribute(attrName, String(value))
+
+			// Remove the original binding attribute
+			element.removeAttribute(attr.name)
+		}
+	}
+
+	// Process event bindings (@event)
+	for (const attr of Array.from(element.attributes)) {
+		if (attr.name.startsWith('@')) {
+			const eventName = attr.name.substring(1)
+			const handlerValue = attr.value.trim()
+
+			// Remove the original binding attribute
+			element.removeAttribute(attr.name)
+
+			// Add event listener
+			element.addEventListener(eventName, (event: Event) => {
+				try {
+					// Create a merged context
+					const mergedContext = {
+						...context.states,
+						...itemContext,
+						$event: event,
+						$el: element,
+						setState: context.setState,
+						getState: context.getState,
+						triggerFunc: context.triggerFunc(eventName, event)
+					}
+
+					// Execute the expression
+					const fnStr = `with(this) { ${handlerValue} }`
+					new Function(fnStr).call(mergedContext)
+				} catch (err) {
+					console.error(
+						`Error executing event handler with item context: ${handlerValue}`,
+						err,
+					)
+				}
+			})
+		}
+	}
+
+	// Process conditional rendering (%if)
+	let isConditional = false
+	let shouldDisplay = true
+
+	for (const attr of Array.from(element.attributes)) {
+		if (attr.name === '%if') {
+			isConditional = true
+			const expr = attr.value.trim()
+
+			// Remove the original binding attribute
+			element.removeAttribute(attr.name)
+
+			// Calculate the condition
+			const result = evaluateExpressionWithItemContext(
+				expr,
+				itemContext,
+				context,
+			)
+			shouldDisplay = Boolean(result)
+
+			// Apply the condition
+			if (!shouldDisplay) (element as HTMLElement).style.display = 'none'
+		}
+	}
+
+	// If the condition evaluates to false, skip further processing of this element
+	if (isConditional && !shouldDisplay) {
+		return
+	}
+
+	// Process nested list rendering (%for)
+	let hasForDirective = false
+
+	for (const attr of Array.from(element.attributes)) {
+		if (attr.name === '%for') {
+			hasForDirective = true
+			const forExpr = attr.value.trim()
+
+			// Remove the original binding attribute
+			element.removeAttribute(attr.name)
+
+			// Set up nested list rendering
+			setupNestedListRendering(element, forExpr, itemContext, context)
+		}
+	}
+
+	// If this element is a list element, skip child element processing
+	if (hasForDirective) return
+
+	// Recursively process all child elements
+	for (const child of Array.from(element.children))
+		processElementWithItemContext(child, itemContext, context)
+}
+
+// Handle list rendering (%for macro)
+function setupListRendering(
+	element: Element,
+	expr: string,
+	context: ListRenderingContext,
+) {
+	// Parse the expression (e.g., "item in items" or "(item, index) in items")
+	const match = expr.match(/(?:\(([^,]+),\s*([^)]+)\)|([^,\s]+))\s+in\s+(.+)/)
+	if (!match) {
+		console.error(`Invalid %for expression: ${expr}`)
+		return
+	}
+
+	// Extract the item variable name, index variable name (optional), and collection expression
+	const itemVar = match[3] || match[1]
+	const indexVar = match[2] || null
+	const collectionExpr = match[4].trim()
+
+	// Create a placeholder comment
+	const placeholder = document.createComment(` %for: ${expr} `)
+	element.parentNode?.insertBefore(placeholder, element)
+
+	// Remove the original template element from the DOM
+	const template = element.cloneNode(true) as Element
+	element.parentNode?.removeChild(element)
+
+	// Store current rendered items
+	const renderedItems: Array<{
+		element: Element
+		key: unknown
+		data: unknown
+		index: number
+	}> = []
+
+	// Create a function to update the list when the collection changes
+	const updateList = () => {
+		const collection = evaluateExpressionWithItemContext(
+			collectionExpr,
+			{},
+			context,
+		)
+		if (!collection || !Array.isArray(collection)) {
+			console.warn(
+				`Collection "${collectionExpr}" is not an array or does not exist`,
+			)
+			return
+		}
+
+		const parentNode = placeholder.parentNode
+		if (!parentNode) {
+			console.error("Placeholder's parentNode is null. Cannot update list.")
+			return
+		}
+
+		// Detach all currently rendered DOM items
+		for (const item of renderedItems)
+			if (item.element.parentNode === parentNode)
+				parentNode.removeChild(item.element)
+
+		// Get key attribute if available
+		const keyAttr = template.getAttribute('%key')
+		if (!keyAttr)
+			console.warn(
+				'%key attribute not found in the template, which is not a recommended practice.',
+			)
+
+		// Store a map of existing items by key for reuse
+		const existingElementsByKey = new Map()
+		for (const item of renderedItems)
+			if (item.key !== undefined) existingElementsByKey.set(item.key, item)
+
+		// Clear rendered items
+		renderedItems.length = 0
+
+		// document fragment
+		const fragment = document.createDocumentFragment()
+
+		// Create or update items in the list
+		collection.forEach((item, index) => {
+			// Determine the key for this item
+			const key = keyAttr
+				? evaluateExpressionWithItemContext(
+					keyAttr,
+					{ [itemVar]: item },
+					context,
+					index,
+					itemVar,
+					indexVar ? indexVar : undefined,
+				)
+				: index
+
+			// Check if we can reuse an existing element
+			const existingItem = existingElementsByKey.get(key)
+			let itemElement: Element
+
+			if (existingItem) {
+				// Reuse existing element
+				itemElement = existingItem.element
+				existingElementsByKey.delete(key) // Remove from map so we know it's been used
+			} else {
+				// Create a new element
+				itemElement = template.cloneNode(true) as Element
+			}
+
+			// Update item data
+			renderedItems.push({
+				element: itemElement,
+				key,
+				data: item,
+				index,
+			})
+
+			// Create item context for this item
+			const itemContext = {
+				[itemVar]: item,
+			}
+			if (indexVar) itemContext[indexVar] = index
+
+			// insert %key attribute
+			if (keyAttr) {
+				const keyValue = evaluateExpressionWithItemContext(
+					keyAttr,
+					itemContext,
+					context,
+				)
+				itemElement.setAttribute('data-laterano-key', String(keyValue))
+			}
+
+			// remove original %key attribute
+			itemElement.removeAttribute('%key')
+
+			// Process the element with the item context
+			processElementWithItemContext(itemElement, itemContext, context)
+
+			// Insert the element to the document fragment
+			fragment.appendChild(itemElement)
+		})
+
+		// Insert the document fragment into the DOM
+		placeholder.parentNode?.insertBefore(fragment, placeholder.nextSibling)
+
+		// Remove any remaining unused items
+		for (const item of existingElementsByKey.values())
+			if (item.element.parentNode)
+				item.element.parentNode.removeChild(item.element)
+	}
+
+	// Initial render
+	updateList()
+
+	// Set up state dependency for collection changes
+	if (!context.stateToElementsMap[collectionExpr])
+		context.stateToElementsMap[collectionExpr] = new Set()
+
+	// Using a unique identifier for this list rendering instance
+	const listVirtualElement = document.createElement('div')
+	context.stateToElementsMap[collectionExpr].add(
+		listVirtualElement as HTMLElement,
+	)
+
+	// Add listener for state changes
+	context.statesListeners[collectionExpr] = () => {
+		updateList()
 	}
 }

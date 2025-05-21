@@ -154,8 +154,8 @@ export default (options: ComponentOptions) => {
 				updateTextNode: this._updateTextNode.bind(this),
 				setupAttributeBinding: this._setupAttributeBinding.bind(this),
 				setupArrowFunctionHandler: this._setupArrowFunctionHandler.bind(this),
-				setupFunctionCallHandler: this._setupFunctionCallHandler.bind(this),
 				setupExpressionHandler: this._setupExpressionHandler.bind(this),
+				setupFunctionCallHandler: this._setupFunctionCallHandler.bind(this),
 				setupListRendering: this._setupListRendering.bind(this),
 				stateToElementsMap: this._stateToElementsMap,
 				textBindings: this._textBindings,
@@ -171,6 +171,8 @@ export default (options: ComponentOptions) => {
 				evaluateIfCondition: this._evaluateIfCondition.bind(this),
 				extractStatePathsFromExpression:
 					this._extractStatePathsFromExpression.bind(this),
+				states: this._states,
+				triggerFunc: this.triggerFunc.bind(this),
 			})
 		}
 
