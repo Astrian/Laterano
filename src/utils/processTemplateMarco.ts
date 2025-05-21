@@ -24,7 +24,6 @@ export default function processTemplateMacros(
 			eventName: string,
 			handlerValue: string,
 		) => void
-		setupListRendering: (element: Element, expr: string) => void
 		stateToElementsMap: Record<string, Set<HTMLElement>>
 		textBindings: {
 			node: Text
