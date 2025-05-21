@@ -20,6 +20,22 @@ jobs:
         run: npm ci
       - name: Run Biome
         run: npm run quality-check
+    if: always()
+    outputs:
+      status: ${{ job.status }}
+    
+    
+  failed-webhook:
+    needs: quality
+    runs-on: ubuntu-latest
+    if: ${{ needs.quality.outputs.status == 'failure' }}
+    steps:
+      - name: Send webhook
+        run: |
+          QUALITY_CHECK_GROUP="Laterano CI/CD"
+          QUALITY_CHECK_TITLE="Quality Check Failed"
+          QUALITY_CHECK_MESSAGE="Quality check failed for commit ${{ gitea.sha }} in ${{ gitea.repository }}"
+          curl -X POST "https://bark.nas.astrian.moe/${{ secrets.BARK_TOKEN }}/${QUALITY_CHECK_TITLE}/${QUALITY_CHECK_MESSAGE}?group=${QUALITY_CHECK_GROUP}"
 
   publish:
     runs-on: ubuntu-latest
@@ -58,3 +74,11 @@ jobs:
         run: npm publish --access $ACCESS_LEVEL
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+  
+      - name: Send webhook
+        run: |
+          PACKAGE_NAME="${{ steps.package_name.outputs.PACKAGE_NAME }}"
+          MSG_GROUP="Laterano CI/CD"
+          MSG_TITLE="Package Published"
+          MSG_MESSAGE="Package $PACKAGE_NAME has been published to npm."
+          curl -X POST "https://bark.nas.astrian.moe/${{ secrets.BARK_TOKEN }}/${MSG_TITLE}/${MSG_MESSAGE}?group=${MSG_GROUP}"
