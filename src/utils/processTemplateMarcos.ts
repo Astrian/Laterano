@@ -1,3 +1,5 @@
+import setupArrowFunctionHandler from './setupArrowFunctionHandler'
+
 export default function processTemplateMacros(
 	element: Element,
 	context: CustomElement,
@@ -8,24 +10,6 @@ export default function processTemplateMacros(
 			attrName: string,
 			expr: string,
 			attrValue: string,
-		) => void
-		setupArrowFunctionHandler: (
-			element: Element,
-			eventName: string,
-			handlerValue: string,
-			ops: {
-				createHandlerContext: (
-					event: Event,
-					element: Element,
-				) => {
-					states: Record<string, unknown>
-					stateToElementsMap: Record<string, Set<HTMLElement>>
-					statesListeners: Record<string, (value: unknown) => void>
-					setState: (keyPath: string, value: unknown) => void
-					getState: (keyPath: string) => unknown
-					triggerFunc: (eventName: string, ...args: unknown[]) => void
-				}
-			},
 		) => void
 		setupFunctionCallHandler: (
 			element: Element,
@@ -162,7 +146,7 @@ export default function processTemplateMacros(
 				// Handle different types of event handlers
 				if (handlerValue.includes('=>')) {
 					// Handle arrow function: @click="e => setState('count', count + 1)"
-					options.setupArrowFunctionHandler(
+					setupArrowFunctionHandler(
 						currentElementNode,
 						eventName,
 						handlerValue,

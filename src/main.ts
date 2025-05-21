@@ -155,7 +155,7 @@ export default (options: ComponentOptions) => {
 					this._extractStatePathsFromExpression.bind(this),
 				states: this._states,
 				triggerFunc: this.triggerFunc.bind(this),
-				setupArrowFunctionHandler: utils.setupArrowFunctionHandler.bind(this),
+				// setupArrowFunctionHandler: utils.setupArrowFunctionHandler.bind(this),
 			})
 		}
 

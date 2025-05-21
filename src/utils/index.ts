@@ -1,5 +1,5 @@
 import parseTemplate from './parseTemplate'
-import processTemplateMacros from './processTemplateMarco'
+import processTemplateMacros from './processTemplateMarcos'
 import setupArrowFunctionHandler from './setupArrowFunctionHandler'
 import triggerDomUpdates from './triggerDomUpdates'
 
