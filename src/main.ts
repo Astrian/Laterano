@@ -57,11 +57,12 @@ export default (options: ComponentOptions) => {
 					updateTextNode: (node: Text, value: string) => this._updateTextNode(node, value, value),
 					getNestedState: (keyPath: string) => this._getNestedState(keyPath),
 					scheduleUpdate: this._scheduleUpdate.bind(this),
-					statesListeners: this._statesListeners,
+					statesListenersSelf: this._statesListeners,
 					conditionalElements: this._conditionalElements,
 					evaluateIfCondition: this._evaluateIfCondition.bind(this),
 				},
 				options.states,
+				options.statesListeners
 			)
 
 			// initialize shadow dom

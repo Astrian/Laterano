@@ -17,7 +17,6 @@ export default function initState(
 		updateTextNode: (node: Text, value: string) => void
 		getNestedState: (keyPath: string) => unknown
 		scheduleUpdate: (elements: Set<HTMLElement>) => void
-		statesListeners: Record<string, (value: unknown) => void>
 		conditionalElements: Map<
 			Element,
 			{
@@ -28,8 +27,10 @@ export default function initState(
 		>
 		evaluateIfCondition: (element: Element, expr: string) => void
 		currentRenderingElement?: HTMLElement
+		statesListenersSelf: Record<string, (...args: unknown[]) => void>
 	},
 	states?: Record<string, unknown>,
+	statesListeners?: { [key: string]: (value: unknown) => void; } | undefined
 ) {
 	console.log(states)
 	// copy state from options
@@ -61,8 +62,8 @@ export default function initState(
 					getNestedState: ops.getNestedState,
 					scheduleUpdate: ops.scheduleUpdate,
 				})
-				if (ops.statesListeners[keyPath])
-					ops.statesListeners[keyPath](value)
+				if (ops.statesListenersSelf[keyPath])
+					ops.statesListenersSelf[keyPath](value)
 
 				// trigger %if macros
 				if (ops.conditionalElements.size > 0)
@@ -72,7 +73,7 @@ export default function initState(
 					})
 
 				// trigger state update events
-				ops.statesListeners?.[keyPath]?.(value)
+				statesListeners?.[keyPath]?.(value)
 
 				return true
 			},
