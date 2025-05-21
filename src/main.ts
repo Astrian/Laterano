@@ -12,8 +12,10 @@ interface ComponentOptions {
 		newValue: string,
 	) => void
 	states?: Record<string, unknown>
-	statesListeners?: { [key: string]: (value: unknown) => void }
-	funcs?: { [key: string]: (...args: unknown[]) => void }
+	// biome-ignore lint/suspicious/noExplicitAny: no assuming the types of arguments
+	statesListeners?: { [key: string]: (value: any) => void }
+	// biome-ignore lint/suspicious/noExplicitAny: no assuming the types of arguments
+	funcs?: { [key: string]: (...args: any[]) => void }
 }
 
 interface CustomElement extends HTMLElement {
