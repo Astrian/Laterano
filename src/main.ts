@@ -47,80 +47,22 @@ export default (options: ComponentOptions) => {
 			this._initialize()
 		}
 
-		private _initState() {
-			// copy state from options
-			this._states = new Proxy(
-				{ ...(states || {}) },
-				{
-					set: (
-						target: Record<string, unknown>,
-						keyPath: string,
-						value: unknown,
-					) => {
-						const valueRoute = keyPath.split('.')
-						let currentTarget = target
-						for (const i in valueRoute) {
-							const key = valueRoute[i]
-							if (Number.parseInt(i) === valueRoute.length - 1) {
-								currentTarget[key] = value
-							} else {
-								if (!currentTarget[key]) currentTarget[key] = {}
-								currentTarget = currentTarget[key] as Record<string, unknown>
-							}
-						}
-						// trigger dom updates
-						utils.triggerDomUpdates(keyPath, {
-							stateToElementsMap: this._stateToElementsMap,
-							textBindings: this._textBindings,
-							attributeBindings: this._attributeBindings,
-							updateTextNode: this._updateTextNode.bind(this),
-							getNestedState: this._getNestedState.bind(this),
-							scheduleUpdate: this._scheduleUpdate.bind(this),
-						})
-						if (this._statesListeners[keyPath])
-							this._statesListeners[keyPath](value)
-
-						// trigger %if macros
-						if (this._conditionalElements.size > 0)
-							this._conditionalElements.forEach((info, element) => {
-								if (info.expr.includes(keyPath))
-									this._evaluateIfCondition(element, info.expr)
-							})
-
-						// trigger state update events
-						statesListeners?.[keyPath]?.(value)
-
-						return true
-					},
-					get: (target: Record<string, unknown>, keyPath: string) => {
-						// collect state dependencies
-						if (this._currentRenderingElement) {
-							if (!this._stateToElementsMap[keyPath])
-								this._stateToElementsMap[keyPath] = new Set()
-							this._stateToElementsMap[keyPath].add(
-								this._currentRenderingElement,
-							)
-						}
-
-						const valueRoute = keyPath.split('.')
-						let currentTarget = target
-						for (const i in valueRoute) {
-							const key = valueRoute[i]
-							if (Number.parseInt(i) === valueRoute.length - 1)
-								return currentTarget[key]
-
-							if (!currentTarget[key]) currentTarget[key] = {}
-							currentTarget = currentTarget[key] as Record<string, unknown>
-						}
-						return undefined
-					},
-				},
-			)
-		}
-
 		private _initialize() {
 			// initialize state
-			this._initState()
+			this._states = utils.initState(
+				{
+					stateToElementsMap: this._stateToElementsMap,
+					textBindings: this._textBindings,
+					attributeBindings: this._attributeBindings,
+					updateTextNode: (node: Text, value: string) => this._updateTextNode(node, value, value),
+					getNestedState: (keyPath: string) => this._getNestedState(keyPath),
+					scheduleUpdate: this._scheduleUpdate.bind(this),
+					statesListeners: this._statesListeners,
+					conditionalElements: this._conditionalElements,
+					evaluateIfCondition: this._evaluateIfCondition.bind(this),
+				},
+				options.states,
+			)
 
 			// initialize shadow dom
 			const shadow = this.attachShadow({ mode: 'open' })
