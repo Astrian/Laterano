@@ -307,16 +307,6 @@ function setupConditionRendering(
 	}
 }
 
-// Interface for list rendering context
-interface ListRenderingContext {
-	states: Record<string, unknown>
-	stateToElementsMap: Record<string, Set<HTMLElement>>
-	statesListeners: Record<string, (value: unknown) => void>
-	setState: (keyPath: string, value: unknown) => void
-	getState: (keyPath: string) => unknown
-	triggerFunc: (eventName: string, ...args: unknown[]) => void
-}
-
 // Evaluate expressions using the item context
 function evaluateExpressionWithItemContext(
 	expression: string,
