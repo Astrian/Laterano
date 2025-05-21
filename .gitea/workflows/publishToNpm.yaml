@@ -25,7 +25,7 @@ jobs:
       status: ${{ job.status }}
     
     
-  failed-webhook:
+    failed-webhook:
     needs: quality
     runs-on: ubuntu-latest
     if: ${{ needs.quality.outputs.status == 'failure' }}
@@ -35,7 +35,11 @@ jobs:
           QUALITY_CHECK_GROUP="Laterano CI/CD"
           QUALITY_CHECK_TITLE="Quality Check Failed"
           QUALITY_CHECK_MESSAGE="Quality check failed for commit ${{ gitea.sha }} in ${{ gitea.repository }}"
-          curl -X POST "https://bark.nas.astrian.moe/${{ secrets.BARK_TOKEN }}/${QUALITY_CHECK_TITLE}/${QUALITY_CHECK_MESSAGE}?group=${QUALITY_CHECK_GROUP}"
+          
+          # URL-encode the message
+          ENCODED_MESSAGE=$(echo "$QUALITY_CHECK_MESSAGE" | sed 's/%/%25/g' | sed 's/ /%20/g' | sed 's/!/%21/g' | sed 's/"/%22/g' | sed 's/#/%23/g' | sed 's/\$/%24/g' | sed 's/&/%26/g' | sed 's/'"'"'/%27/g' | sed 's/(/%28/g' | sed 's/)/%29/g' | sed 's/\*/%2A/g' | sed 's/+/%2B/g' | sed 's/,/%2C/g' | sed 's/\//%2F/g' | sed 's/:/%3A/g' | sed 's/;/%3B/g' | sed 's/=/%3D/g' | sed 's/?/%3F/g' | sed 's/@/%40/g')
+          
+          curl -X POST "https://bark.nas.astrian.moe/${{ secrets.BARK_TOKEN }}/${QUALITY_CHECK_TITLE}/${ENCODED_MESSAGE}?group=${QUALITY_CHECK_GROUP}"
 
   publish:
     runs-on: ubuntu-latest
@@ -81,4 +85,7 @@ jobs:
           MSG_GROUP="Laterano CI/CD"
           MSG_TITLE="Package Published"
           MSG_MESSAGE="Package $PACKAGE_NAME has been published to npm."
-          curl -X POST "https://bark.nas.astrian.moe/${{ secrets.BARK_TOKEN }}/${MSG_TITLE}/${MSG_MESSAGE}?group=${MSG_GROUP}"
+          
+          # URL-encode the message
+          ENCODED_MESSAGE=$(echo "$MSG_MESSAGE" | sed 's/%/%25/g' | sed 's/ /%20/g' | sed 's/!/%21/g' | sed 's/"/%22/g' | sed 's/#/%23/g' | sed 's/\$/%24/g' | sed 's/&/%26/g' | sed 's/'"'"'/%27/g' | sed 's/(/%28/g' | sed 's/)/%29/g' | sed 's/\*/%2A/g' | sed 's/+/%2B/g' | sed 's/,/%2C/g' | sed 's/\//%2F/g' | sed 's/:/%3A/g' | sed 's/;/%3B/g' | sed 's/=/%3D/g' | sed 's/?/%3F/g' | sed 's/@/%40/g')
+          curl -X POST "https://bark.nas.astrian.moe/${{ secrets.BARK_TOKEN }}/${MSG_TITLE}/${ENCODED_MESSAGE}?group=${MSG_GROUP}"
