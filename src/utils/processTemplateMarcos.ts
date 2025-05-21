@@ -1,5 +1,19 @@
 import setupArrowFunctionHandler from './setupArrowFunctionHandler'
 
+interface CustomElement extends HTMLElement {
+	setState(key_path: string, value: unknown): void
+	getState(key_path: string): unknown
+}
+
+interface ListRenderingContext {
+	states: Record<string, unknown>
+	stateToElementsMap: Record<string, Set<HTMLElement>>
+	statesListeners: Record<string, (value: unknown) => void>
+	setState: (keyPath: string, value: unknown) => void
+	getState: (keyPath: string) => unknown
+	triggerFunc: (eventName: string, ...args: unknown[]) => void
+}
+
 export default function processTemplateMacros(
 	element: Element,
 	context: CustomElement,
