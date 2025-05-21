@@ -13,6 +13,19 @@ export default function processTemplateMacros(
 			element: Element,
 			eventName: string,
 			handlerValue: string,
+			ops: {
+				createHandlerContext: (
+					event: Event,
+					element: Element,
+				) => {
+					states: Record<string, unknown>
+					stateToElementsMap: Record<string, Set<HTMLElement>>
+					statesListeners: Record<string, (value: unknown) => void>
+					setState: (keyPath: string, value: unknown) => void
+					getState: (keyPath: string) => unknown
+					triggerFunc: (eventName: string, ...args: unknown[]) => void
+				}
+			},
 		) => void
 		setupFunctionCallHandler: (
 			element: Element,
@@ -153,6 +166,16 @@ export default function processTemplateMacros(
 						currentElementNode,
 						eventName,
 						handlerValue,
+						{
+							createHandlerContext: (_event: Event, _element: Element) => ({
+								states: options.states,
+								stateToElementsMap: options.stateToElementsMap,
+								statesListeners: options.stateListeners,
+								setState: context.setState.bind(context),
+								getState: context.getState.bind(context),
+								triggerFunc: options.triggerFunc.bind(context),
+							}),
+						},
 					)
 				} else if (handlerValue.includes('(') && handlerValue.includes(')')) {
 					// Handle function call: @click="increment(5)"

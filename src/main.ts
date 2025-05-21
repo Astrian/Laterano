@@ -137,7 +137,6 @@ export default (options: ComponentOptions) => {
 			utils.processTemplateMacros(rootElement, this, {
 				updateTextNode: this._updateTextNode.bind(this),
 				setupAttributeBinding: this._setupAttributeBinding.bind(this),
-				setupArrowFunctionHandler: this._setupArrowFunctionHandler.bind(this),
 				setupExpressionHandler: this._setupExpressionHandler.bind(this),
 				setupFunctionCallHandler: this._setupFunctionCallHandler.bind(this),
 				stateToElementsMap: this._stateToElementsMap,
@@ -156,6 +155,7 @@ export default (options: ComponentOptions) => {
 					this._extractStatePathsFromExpression.bind(this),
 				states: this._states,
 				triggerFunc: this.triggerFunc.bind(this),
+				setupArrowFunctionHandler: utils.setupArrowFunctionHandler.bind(this),
 			})
 		}
 
@@ -241,71 +241,6 @@ export default (options: ComponentOptions) => {
 				(match) =>
 					!['true', 'false', 'null', 'undefined', 'this'].includes(match),
 			)
-		}
-
-		// Handle arrow function
-		private _setupArrowFunctionHandler(
-			element: Element,
-			eventName: string,
-			handlerValue: string,
-		) {
-			element.addEventListener(eventName, (event: Event) => {
-				try {
-					// Arrow function parsing
-					const splitted = handlerValue.split('=>')
-					if (splitted.length !== 2) {
-						throw new Error(`Invalid arrow function syntax: ${handlerValue}`)
-					}
-					const paramsStr = (() => {
-						if (splitted[0].includes('(')) return splitted[0].trim()
-						return `(${splitted[0].trim()})`
-					})()
-					const bodyStr = splitted[1].trim()
-
-					// Check if the function body is wrapped in {}
-					const isMultiline = bodyStr.startsWith('{') && bodyStr.endsWith('}')
-
-					// If it is a multiline function body, remove the outer braces
-					if (isMultiline) {
-						// Remove the outer braces
-						let bodyStr = handlerValue.split('=>')[1].trim()
-						bodyStr = bodyStr.substring(1, bodyStr.length - 1)
-
-						// Build code for multiline arrow function
-						const functionCode = `
-									return function${paramsStr} {
-										${bodyStr}
-									}
-								`
-
-						// Create context object
-						const context = this._createHandlerContext(event, element)
-
-						// Create and call function
-						const handlerFn = new Function(functionCode).call(null)
-						handlerFn.apply(context, [event])
-					} else {
-						// Single line arrow function, directly return expression result
-						const functionCode = `
-									return function${paramsStr} {
-										return ${bodyStr}
-									}
-								`
-
-						// Create context object
-						const context = this._createHandlerContext(event, element)
-
-						// Create and call function
-						const handlerFn = new Function(functionCode).call(null)
-						handlerFn.apply(context, [event])
-					}
-				} catch (err) {
-					console.error(
-						`Error executing arrow function handler: ${handlerValue}`,
-						err,
-					)
-				}
-			})
 		}
 
 		// Create handler context
