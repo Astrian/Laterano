@@ -44,10 +44,7 @@ export default (options: ComponentOptions) => {
 			super()
 
 			// initialize dom tree and append to shadow root, as well as initialize state
-			this._initialize()
-		}
 
-		private _initialize() {
 			// initialize state
 			this._states = utils.initState(
 				{
