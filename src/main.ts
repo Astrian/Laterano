@@ -161,12 +161,15 @@ export default (options: ComponentOptions) => {
 				setupListRendering: this._setupListRendering.bind(this),
 				stateToElementsMap: this._stateToElementsMap,
 				textBindings: this._textBindings,
-				availableFuncs: Object.getOwnPropertyNames(Object.getPrototypeOf(this)).filter(
-					name => typeof (this as Record<string, unknown>)[name] === 'function' && name !== 'constructor'
+				availableFuncs: Object.getOwnPropertyNames(
+					Object.getPrototypeOf(this),
+				).filter(
+					(name) =>
+						typeof (this as Record<string, unknown>)[name] === 'function' &&
+						name !== 'constructor',
 				),
 			})
 		}
-
 
 		private _scheduleUpdate(elements: Set<HTMLElement>) {
 			requestAnimationFrame(() => {
@@ -325,12 +328,12 @@ export default (options: ComponentOptions) => {
 					// Determine the key for this item
 					const key = keyAttr
 						? this._evaluateExpressionWithItemContext(
-							keyAttr ?? '',
-							item,
-							index,
-							itemVar,
-							indexVar ? indexVar : undefined,
-						)
+								keyAttr ?? '',
+								item,
+								index,
+								itemVar,
+								indexVar ? indexVar : undefined,
+							)
 						: index
 
 					// Check if we can reuse an existing element
@@ -415,7 +418,7 @@ export default (options: ComponentOptions) => {
 			itemContext: Record<string, unknown>,
 		) {
 			// 1. Store the item context of the element so that subsequent updates can find it
-			; (element as { _itemContext?: Record<string, unknown> })._itemContext =
+			;(element as { _itemContext?: Record<string, unknown> })._itemContext =
 				itemContext
 
 			// 2. Process bindings in text nodes

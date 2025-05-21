@@ -32,7 +32,7 @@ export default function processTemplateMacros(
 			node: Text
 			expr: string
 			originalContent: string
-		}[],
+		}[]
 		availableFuncs: string[]
 	},
 ) {
@@ -129,9 +129,9 @@ export default function processTemplateMacros(
 			}
 
 			// Process @event bindings, such as @click="handleClick"
-			const eventBindings = Array.from(
-				currentElementNode.attributes,
-			).filter((attr) => attr.name.startsWith('@'))
+			const eventBindings = Array.from(currentElementNode.attributes).filter(
+				(attr) => attr.name.startsWith('@'),
+			)
 			// eventBindings.forEach((attr) => {
 			for (const attr of eventBindings) {
 				const eventName = attr.name.substring(1) // Remove '@'
@@ -141,16 +141,15 @@ export default function processTemplateMacros(
 				currentElementNode.removeAttribute(attr.name)
 
 				// Handle different types of event handlers
-				if (handlerValue.includes('=>')) { // Handle arrow function: @click="e => setState('count', count + 1)"
+				if (handlerValue.includes('=>')) {
+					// Handle arrow function: @click="e => setState('count', count + 1)"
 					options.setupArrowFunctionHandler(
 						currentElementNode,
 						eventName,
 						handlerValue,
 					)
-				} else if (
-					handlerValue.includes('(') &&
-					handlerValue.includes(')')
-				) { // Handle function call: @click="increment(5)"
+				} else if (handlerValue.includes('(') && handlerValue.includes(')')) {
+					// Handle function call: @click="increment(5)"
 					options.setupFunctionCallHandler(
 						currentElementNode,
 						eventName,
@@ -159,16 +158,14 @@ export default function processTemplateMacros(
 				} else if (
 					options.availableFuncs.includes(handlerValue) &&
 					typeof (context as unknown as Record<string, unknown>)[
-					handlerValue
+						handlerValue
 					] === 'function'
-				) { // Handle method reference: @click="handleClick"
+				) {
+					// Handle method reference: @click="handleClick"
 					currentElementNode.addEventListener(
 						eventName,
 						(
-							context as unknown as Record<
-								string,
-								(...args: unknown[]) => void
-							>
+							context as unknown as Record<string, (...args: unknown[]) => void>
 						)[handlerValue].bind(context),
 					)
 				} else {
@@ -182,9 +179,9 @@ export default function processTemplateMacros(
 			}
 
 			// Process %-started macros, such as %connect="stateName", %if="condition", %for="item in items"
-			const macroBindings = Array.from(
-				currentElementNode.attributes,
-			).filter((attr) => attr.name.startsWith('%'))
+			const macroBindings = Array.from(currentElementNode.attributes).filter(
+				(attr) => attr.name.startsWith('%'),
+			)
 
 			// macroBindings.forEach((attr) => {
 			for (const attr of macroBindings) {
