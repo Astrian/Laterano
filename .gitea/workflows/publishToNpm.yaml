@@ -25,7 +25,7 @@ jobs:
       status: ${{ job.status }}
     
     
-    failed-webhook:
+  failed-webhook:
     needs: quality
     runs-on: ubuntu-latest
     if: ${{ needs.quality.outputs.status == 'failure' }}
