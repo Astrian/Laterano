@@ -165,7 +165,7 @@ export default function processTemplateMacros(
 				} else if (
 					options.availableFuncs.includes(handlerValue) &&
 					typeof (context as unknown as Record<string, unknown>)[
-					handlerValue
+						handlerValue
 					] === 'function'
 				) {
 					// Handle method reference: @click="handleClick"
@@ -440,7 +440,7 @@ function processElementWithItemContext(
 	context: ListRenderingContext,
 ) {
 	// Store the item context of the element so that subsequent updates can find it
-	; (element as { _itemContext?: Record<string, unknown> })._itemContext =
+	;(element as { _itemContext?: Record<string, unknown> })._itemContext =
 		itemContext
 
 	// Process bindings in text nodes
@@ -507,7 +507,8 @@ function processElementWithItemContext(
 						$el: element,
 						setState: context.setState,
 						getState: context.getState,
-						triggerFunc: context.triggerFunc(eventName, event)
+						triggerFunc: (eventName: string, ...args: unknown[]) =>
+							context.triggerFunc(eventName, ...args),
 					}
 
 					// Execute the expression
@@ -659,13 +660,13 @@ function setupListRendering(
 			// Determine the key for this item
 			const key = keyAttr
 				? evaluateExpressionWithItemContext(
-					keyAttr,
-					{ [itemVar]: item },
-					context,
-					index,
-					itemVar,
-					indexVar ? indexVar : undefined,
-				)
+						keyAttr,
+						{ [itemVar]: item },
+						context,
+						index,
+						itemVar,
+						indexVar ? indexVar : undefined,
+					)
 				: index
 
 			// Check if we can reuse an existing element
