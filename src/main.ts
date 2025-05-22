@@ -42,7 +42,8 @@ export default (options: ComponentOptions) => {
 		private _states: Record<string, unknown> = {}
 		private _stateToElementsMap: Record<string, Set<HTMLElement>> = {}
 		private _currentRenderingElement: HTMLElement | null = null
-		private _statesListeners: Record<string, (...args: unknown[]) => unknown> = {}
+		private _statesListeners: Record<string, (...args: unknown[]) => unknown> =
+			{}
 		private _textBindings: Array<{
 			node: Text
 			expr: string
@@ -277,7 +278,8 @@ export default (options: ComponentOptions) => {
 			eventName: string,
 			handlerValue: string,
 		) {
-			element.addEventListener(eventName, (event: Event): unknown => { // Explicitly set return type to unknown
+			element.addEventListener(eventName, (event: Event): unknown => {
+				// Explicitly set return type to unknown
 				try {
 					// Create context object
 					const context = this._createHandlerContext(event, element)
