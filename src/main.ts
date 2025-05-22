@@ -4,22 +4,22 @@ interface ComponentOptions {
 	tag: string
 	template: string
 	style?: string
-	onMount?: (this: CustomElement) => void
-	onUnmount?: () => void
+	onMount?: (this: CustomElement) => unknown
+	onUnmount?: () => unknown
 	onAttributeChanged?: (
 		attrName: string,
 		oldValue: string,
 		newValue: string,
-	) => void
+	) => unknown
 	states?: Record<string, unknown>
 	// biome-ignore lint/suspicious/noExplicitAny: no assuming the types of arguments
-	statesListeners?: { [key: string]: (value: any) => void }
+	statesListeners?: { [key: string]: (value: any) => unknown }
 	// biome-ignore lint/suspicious/noExplicitAny: no assuming the types of arguments
-	funcs?: { [key: string]: (...args: any[]) => void }
+	funcs?: { [key: string]: (...args: any[]) => unknown }
 }
 
 interface CustomElement extends HTMLElement {
-	setState(key_path: string, value: unknown): void
+	setState(key_path: string, value: unknown): unknown
 	getState(key_path: string): unknown
 }
 
@@ -42,7 +42,7 @@ export default (options: ComponentOptions) => {
 		private _states: Record<string, unknown> = {}
 		private _stateToElementsMap: Record<string, Set<HTMLElement>> = {}
 		private _currentRenderingElement: HTMLElement | null = null
-		private _statesListeners: Record<string, (...args: unknown[]) => void> = {}
+		private _statesListeners: Record<string, (...args: unknown[]) => unknown> = {}
 		private _textBindings: Array<{
 			node: Text
 			expr: string
@@ -215,7 +215,7 @@ export default (options: ComponentOptions) => {
 				$event: Event
 				$el: Element
 				this: CustomElementImpl // Provide reference to the component instance
-				setState: (keyPath: string, value: unknown) => void
+				setState: (keyPath: string, value: unknown) => unknown
 				getState: (keyPath: string) => unknown
 			} = {
 				...this._states,
@@ -237,7 +237,7 @@ export default (options: ComponentOptions) => {
 					name !== 'constructor'
 				)
 					context[name] = (
-						this as unknown as Record<string, (...args: unknown[]) => void>
+						this as unknown as Record<string, (...args: unknown[]) => unknown>
 					)[name].bind(this)
 
 			return context
@@ -277,7 +277,7 @@ export default (options: ComponentOptions) => {
 			eventName: string,
 			handlerValue: string,
 		) {
-			element.addEventListener(eventName, (event: Event) => {
+			element.addEventListener(eventName, (event: Event): unknown => { // Explicitly set return type to unknown
 				try {
 					// Create context object
 					const context = this._createHandlerContext(event, element)
@@ -290,7 +290,8 @@ export default (options: ComponentOptions) => {
 						`
 
 					// Execute expression
-					const result = new Function(fnStr).call(context)
+					// new Function returns 'any', which is assignable to 'unknown'.
+					const result: unknown = new Function(fnStr).call(context)
 
 					// If the expression returns a value, it can be used for two-way binding
 					return result
@@ -299,6 +300,7 @@ export default (options: ComponentOptions) => {
 						`Error executing expression handler: ${handlerValue}`,
 						err,
 					)
+					return undefined // undefined is assignable to unknown
 				}
 			})
 		}
