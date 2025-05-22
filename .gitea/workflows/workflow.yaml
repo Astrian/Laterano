@@ -1,0 +1,129 @@
+name: Quality Check & Publish
+
+on:
+  push:
+    branches:
+      - '*'
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v2
+      - name: Set up Node.js
+        uses: actions/setup-node@v2
+        with:
+          node-version: '22'
+      - name: Install dependencies
+        run: npm ci
+      - name: Run Biome
+        run: npm run quality-check
+    if: always()
+    outputs:
+      status: ${{ job.status }}
+    
+  quality-failed-webhook:
+    needs: quality
+    runs-on: ubuntu-latest
+    if: ${{ needs.quality.outputs.status == 'failure' }}
+    steps:
+      - name: Send webhook
+        run: |
+          QUALITY_CHECK_GROUP="Laterano CI/CD"
+          QUALITY_CHECK_TITLE="Quality Check Failed"
+          QUALITY_CHECK_MESSAGE="Quality check failed for commit ${{ gitea.sha }} in ${{ gitea.repository }}"
+          
+          # URL-encode the message
+          ENCODED_GROUP=$(echo "$MSG_GROUP" sed 's/%/%25/g; s/ /%20/g; s/\//%2F/g; s/\?/%3F/g; s/&/%26/g')
+          ENCODED_TITLE=$(echo "$QUALITY_CHECK_TITLE" | sed 's/%/%25/g' | sed 's/ /%20/g' | sed 's/!/%21/g' | sed 's/"/%22/g' | sed 's/#/%23/g' | sed 's/\$/%24/g' | sed 's/&/%26/g' | sed 's/'"'"'/%27/g' | sed 's/(/%28/g' | sed 's/)/%29/g' | sed 's/\*/%2A/g' | sed 's/+/%2B/g' | sed 's/,/%2C/g' | sed 's/\//%2F/g' | sed 's/:/%3A/g' | sed 's/;/%3B/g' | sed 's/=/%3D/g' | sed 's/?/%3F/g' | sed 's/@/%40/g')
+          ENCODED_MESSAGE=$(echo "$QUALITY_CHECK_MESSAGE" | sed 's/%/%25/g' | sed 's/ /%20/g' | sed 's/!/%21/g' | sed 's/"/%22/g' | sed 's/#/%23/g' | sed 's/\$/%24/g' | sed 's/&/%26/g' | sed 's/'"'"'/%27/g' | sed 's/(/%28/g' | sed 's/)/%29/g' | sed 's/\*/%2A/g' | sed 's/+/%2B/g' | sed 's/,/%2C/g' | sed 's/\//%2F/g' | sed 's/:/%3A/g' | sed 's/;/%3B/g' | sed 's/=/%3D/g' | sed 's/?/%3F/g' | sed 's/@/%40/g')
+          
+          echo "Webhook URL:"
+          echo "https://bark.nas.astrian.moe/${{ secrets.BARK_TOKEN }}/${ENCODED_TITLE}/${ENCODED_MESSAGE}?group=${ENCODED_GROUP}"
+
+          curl -X GET "https://bark.nas.astrian.moe/${{ secrets.BARK_TOKEN }}/${ENCODED_TITLE}/${ENCODED_MESSAGE}?group=${ENCODED_GROUP}"          
+
+  publish:
+    runs-on: ubuntu-latest
+    needs: quality
+    if: ${{ github.ref == 'refs/heads/main' || github.ref == 'refs/heads/dev' }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v2
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v2
+        with:
+          node-version: '22'
+          registry-url: 'https://registry.npmjs.org/'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Determine package name
+        id: package_name
+        run: |
+          if [ "${{ gitea.ref }}" == "refs/heads/main" ]; then
+            echo "PACKAGE_NAME=laterano" >> $GITEA_ENV
+            echo "ACCESS_LEVEL=public" >> $GITEA_ENV
+          elif [ "${{ gitea.ref }}" == "refs/heads/dev" ]; then
+            echo "PACKAGE_NAME=@astrian/laterano-dev" >> $GITEA_ENV
+            echo "ACCESS_LEVEL=restricted" >> $GITEA_ENV
+          fi          
+
+      - name: Update package.json for dev releases
+        if: GITEA.ref == 'refs/heads/dev'
+        run: |
+          jq --arg name "@astrian/laterano-dev" '.name=$name' package.json > temp.json && mv temp.json package.json
+          jq --arg version "0.0.0-dev.$(date +%s)" '.version=$version' package.json > temp.json && mv temp.json package.json
+          echo VERSION_CODE=$(jq -r '.version' package.json) >> $GITEA_ENV
+          echo PACKAGE_NAME="@astrian/laterano-dev" >> $GITEA_ENV          
+
+      - name: Get version code
+        if: GITEA.ref == 'refs/heads/main'
+        run: |
+          echo VERSION_CODE=$(jq -r '.version' package.json) >> $GITEA_ENV
+          echo PACKAGE_NAME="laterano" >> $GITEA_ENV          
+
+      - name: Publish to npm
+        run: npm publish --access $ACCESS_LEVEL
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+  
+      - name: Send webhook
+        run: |
+          PACKAGE_NAME="${{ steps.package_name.outputs.PACKAGE_NAME }}"
+          MSG_GROUP="Laterano CI/CD"
+          MSG_TITLE="Package Published"
+          MSG_MESSAGE="Branch ${{ gitea.ref }}: published to npm with version $VERSION_CODE"
+          
+          # URL-encode the message
+          ENCODED_MESSAGE=$(echo "$MSG_MESSAGE" | sed 's/%/%25/g' | sed 's/ /%20/g' | sed 's/!/%21/g' | sed 's/"/%22/g' | sed 's/#/%23/g' | sed 's/\$/%24/g' | sed 's/&/%26/g' | sed 's/'"'"'/%27/g' | sed 's/(/%28/g' | sed 's/)/%29/g' | sed 's/\*/%2A/g' | sed 's/+/%2B/g' | sed 's/,/%2C/g' | sed 's/\//%2F/g' | sed 's/:/%3A/g' | sed 's/;/%3B/g' | sed 's/=/%3D/g' | sed 's/?/%3F/g' | sed 's/@/%40/g')
+          ENCODED_GROUP=$(echo "$MSG_GROUP" | sed 's/%/%25/g' | sed 's/ /%20/g' | sed 's/!/%21/g' | sed 's/"/%22/g' | sed 's/#/%23/g' | sed 's/\$/%24/g' | sed 's/&/%26/g' | sed 's/'"'"'/%27/g' | sed 's/(/%28/g' | sed 's/)/%29/g' | sed 's/\*/%2A/g' | sed 's/+/%2B/g' | sed 's/,/%2C/g' | sed 's/\//%2F/g' | sed 's/:/%3A/g' | sed 's/;/%3B/g' | sed 's/=/%3D/g' | sed 's/?/%3F/g' | sed 's/@/%40/g')
+          ENCODED_TITLE=$(echo "$MSG_TITLE" | sed 's/%/%25/g' | sed 's/ /%20/g' | sed 's/!/%21/g' | sed 's/"/%22/g' | sed 's/#/%23/g' | sed 's/\$/%24/g' | sed 's/&/%26/g' | sed 's/'"'"'/%27/g' | sed 's/(/%28/g' | sed 's/)/%29/g' | sed 's/\*/%2A/g' | sed 's/+/%2B/g' | sed 's/,/%2C/g' | sed 's/\//%2F/g' | sed 's/:/%3A/g' | sed 's/;/%3B/g' | sed 's/=/%3D/g' | sed 's/?/%3F/g' | sed 's/@/%40/g')
+          
+          echo "Webhook URL:"
+          echo "https://bark.nas.astrian.moe/${{ secrets.BARK_TOKEN }}/${ENCODED_TITLE}/${ENCODED_MESSAGE}?group=${ENCODED_GROUP}"
+
+          curl -X GET "https://bark.nas.astrian.moe/${{ secrets.BARK_TOKEN }}/${ENCODED_TITLE}/${ENCODED_MESSAGE}?group=${ENCODED_GROUP}"          
+
+  publish-failed-webhook:
+    needs: publish
+    runs-on: ubuntu-latest
+    if: ${{ needs.publish.outputs.status == 'failure' }}
+    steps:
+      - name: Send webhook
+        run: |
+          PACKAGE_NAME="${{ steps.package_name.outputs.PACKAGE_NAME }}"
+          MSG_GROUP="Laterano CI/CD"
+          MSG_TITLE="Package Publish Failed"
+          MSG_MESSAGE="Package $PACKAGE_NAME failed to publish to npm with version $VERSION_CODE"
+          
+          # URL-encode the message
+          ENCODED_MESSAGE=$(echo "$MSG_MESSAGE" | sed 's/%/%25/g' | sed 's/ /%20/g' | sed 's/!/%21/g' | sed 's/"/%22/g' | sed 's/#/%23/g' | sed 's/\$/%24/g' | sed 's/&/%26/g' | sed 's/'"'"'/%27/g' | sed 's/(/%28/g' | sed 's/)/%29/g' | sed 's/\*/%2A/g' | sed 's/+/%2B/g' | sed 's/,/%2C/g' | sed 's/\//%2F/g' | sed 's/:/%3A/g' | sed 's/;/%3B/g' | sed 's/=/%3D/g' | sed 's/?/%3F/g' | sed 's/@/%40/g')
+          ENCODED_GROUP=$(echo "$MSG_GROUP" | sed 's/%/%25/g' | sed 's/ /%20/g' | sed 's/!/%21/g' | sed 's/"/%22/g' | sed 's/#/%23/g' | sed 's/\$/%24/g' | sed 's/&/%26/g' | sed 's/'"'"'/%27/g' | sed 's/(/%28/g' | sed 's/)/%29/g' | sed 's/\*/%2A/g' | sed 's/+/%2B/g' | sed 's/,/%2C/g' | sed 's/\//%2F/g' | sed 's/:/%3A/g' | sed 's/;/%3B/g' | sed 's/=/%3D/g' | sed 's/?/%3F/g' | sed 's/@/%40/g')
+          ENCODED_TITLE=$(echo "$MSG_TITLE" | sed 's/%/%25/g' | sed 's/ /%20/g' | sed 's/!/%21/g' | sed 's/"/%22/g' | sed 's/#/%23/g' | sed 's/\$/%24/g' | sed 's/&/%26/g' | sed 's/'"'"'/%27/g' | sed 's/(/%28/g' | sed 's/)/%29/g' | sed 's/\*/%2A/g' | sed 's/+/%2B/g' | sed 's/,/%2C/g' | sed 's/\//%2F/g' | sed 's/:/%3A/g' | sed 's/;/%3B/g' | sed 's/=/%3D/g' | sed 's/?/%3F/g' | sed 's/@/%40/g')
+          echo "Webhook URL:"
+          echo "https://bark.nas.astrian.moe/${{ secrets.BARK_TOKEN }}/${ENCODED_TITLE}/${ENCODED_MESSAGE}?group=${ENCODED_GROUP}"
+          curl -X GET "https://bark.nas.astrian.moe/${{ secrets.BARK_TOKEN }}/${ENCODED_TITLE}/${ENCODED_MESSAGE}?group=${ENCODED_GROUP}"          

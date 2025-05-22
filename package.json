@@ -1,14 +1,16 @@
 {
 	"name": "laterano",
-	"version": "0.0.2",
+	"version": "0.0.3",
 	"main": "dist/main.min.js",
-	"types": "dist/types.d.ts",
+	"types": "dist/types/main.d.ts",
 	"module": "dist/main.min.js",
 	"scripts": {
 		"build": "tsc && rollup -c && npm run cleanup-intermediate",
 		"prepare": "npm run build",
-		"cleanup-intermediate": "rimraf dist/main.js dist/types",
-		"quality-check": "biome ci ."
+		"cleanup-intermediate": "rimraf dist/main.js dist/utils",
+		"quality-check": "biome ci .",
+		"qc": "npm run quality-check",
+		"lint": "biome format . --write"
 	},
 	"repository": {
 		"type": "git",

@@ -5,7 +5,7 @@ import dts from 'rollup-plugin-dts'
 
 export default [
 	{
-		input: 'dist/main.js',
+		input: 'src/main.ts',
 		output: [
 			{
 				file: 'dist/main.min.js',
@@ -16,9 +16,19 @@ export default [
 		plugins: [resolve(), typescript()],
 	},
 	{
+		input: 'dist/utils/index.js',
+		output: {
+			file: 'dist/utils.bundle.min.js',
+			format: 'esm',
+			inlineDynamicImports: true,
+			plugins: [terser()],
+		},
+		plugins: [resolve(), typescript({ outDir: 'dist' })],
+	},
+	{
 		input: 'dist/types/main.d.ts',
 		output: {
-			file: 'dist/types.d.ts',
+			file: 'dist/types/main.d.ts',
 			format: 'es',
 		},
 		plugins: [dts()],

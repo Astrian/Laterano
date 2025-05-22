@@ -111,3 +111,7 @@ temp/
 
 # macOS Finder metadata files
 .DS_Store
+
+# vim file
+*.swp
+
