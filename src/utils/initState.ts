@@ -49,7 +49,9 @@ export default function initState(
 					if (Number.parseInt(i) === valueRoute.length - 1) {
 						currentTarget[key] = value
 					} else {
-						if (!currentTarget[key]) currentTarget[key] = {}
+						if (!currentTarget[key]) {
+							currentTarget[key] = {}
+						}
 						currentTarget = currentTarget[key] as Record<string, unknown>
 					}
 				}
@@ -62,15 +64,18 @@ export default function initState(
 					getNestedState: ops.getNestedState,
 					scheduleUpdate: ops.scheduleUpdate,
 				})
-				if (ops.statesListenersSelf[keyPath])
+				if (ops.statesListenersSelf[keyPath]) {
 					ops.statesListenersSelf[keyPath](value)
+				}
 
 				// trigger %if macros
-				if (ops.conditionalElements.size > 0)
+				if (ops.conditionalElements.size > 0) {
 					ops.conditionalElements.forEach((info, element) => {
-						if (info.expr.includes(keyPath))
+						if (info.expr.includes(keyPath)) {
 							ops.evaluateIfCondition(element, info.expr)
+						}
 					})
+				}
 
 				// trigger state update events
 				statesListeners?.[keyPath]?.(value)
@@ -80,8 +85,9 @@ export default function initState(
 			get: (target: Record<string, unknown>, keyPath: string) => {
 				// collect state dependencies
 				if (ops.currentRenderingElement) {
-					if (!ops.stateToElementsMap[keyPath])
+					if (!ops.stateToElementsMap[keyPath]) {
 						ops.stateToElementsMap[keyPath] = new Set()
+					}
 					ops.stateToElementsMap[keyPath].add(ops.currentRenderingElement)
 				}
 
@@ -89,10 +95,13 @@ export default function initState(
 				let currentTarget = target
 				for (const i in valueRoute) {
 					const key = valueRoute[i]
-					if (Number.parseInt(i) === valueRoute.length - 1)
+					if (Number.parseInt(i) === valueRoute.length - 1) {
 						return currentTarget[key]
+					}
 
-					if (!currentTarget[key]) currentTarget[key] = {}
+					if (!currentTarget[key]) {
+						currentTarget[key] = {}
+					}
 					currentTarget = currentTarget[key] as Record<string, unknown>
 				}
 				return undefined

@@ -5,8 +5,9 @@ export default function parseTemplate(template: string): Element {
 	const mainContent = doc.body.firstElementChild
 	let rootElement: Element
 
-	if (mainContent) rootElement = document.importNode(mainContent, true)
-	else {
+	if (mainContent) {
+		rootElement = document.importNode(mainContent, true)
+	} else {
 		const container = document.createElement('div')
 		container.innerHTML = template
 		rootElement = container

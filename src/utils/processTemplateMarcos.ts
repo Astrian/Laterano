@@ -109,8 +109,9 @@ export default function processTemplateMacros(
 						options.updateTextNode(textNode, expr, originalContent)
 
 						// Add dependency relationship for this state path
-						if (!options.stateToElementsMap[expr])
+						if (!options.stateToElementsMap[expr]) {
 							options.stateToElementsMap[expr] = new Set()
+						}
 
 						options.stateToElementsMap[expr].add(
 							textNode as unknown as HTMLElement,
@@ -219,14 +220,14 @@ export default function processTemplateMacros(
 				currentElementNode.removeAttribute(attr.name)
 
 				// Handle different types of macros
-				if (macroName === 'connect')
+				if (macroName === 'connect') {
 					// Handle state connection: %connect="stateName"
 					setupTwoWayBinding(currentElementNode, expr, {
 						getNestedState: context.getState.bind(context),
 						setState: context.setState.bind(context),
 						statesListeners: options.stateListeners,
 					})
-				else if (macroName === 'if') {
+				} else if (macroName === 'if') {
 					ifDirectivesToProcess.push({ element: currentElementNode, expr })
 				} else if (macroName === 'for') {
 					const listContext: ListRenderingContext = {
@@ -238,8 +239,7 @@ export default function processTemplateMacros(
 						triggerFunc: options.triggerFunc.bind(context),
 					}
 					setupListRendering(currentElementNode, expr, listContext)
-				} else if (macroName === 'key') continue
-				else console.warn(`Unknown macro: %${macroName}`)
+				}
 			}
 		}
 	}
@@ -272,12 +272,13 @@ function setupTwoWayBinding(
 	const value = ops.getNestedState(expr)
 
 	// Set the initial value
-	if (value !== undefined)
+	if (value !== undefined) {
 		element.setAttribute('data-laterano-connect', String(value))
-	else
+	} else {
 		console.error(
 			`State \`${expr}\` not found in the component state. Although Laterano will try to work with it, it may has potentially unexpected behavior.`,
 		)
+	}
 
 	// Add event listener for input events
 	element.addEventListener('input', (event: Event) => {
@@ -290,8 +291,11 @@ function setupTwoWayBinding(
 
 	// Add event listener for state changes
 	ops.statesListeners[expr] = (newValue: unknown) => {
-		if (element instanceof HTMLInputElement) element.value = newValue as string
-		else element.setAttribute('data-laterano-connect', String(newValue))
+		if (element instanceof HTMLInputElement) {
+			element.value = newValue as string
+		} else {
+			element.setAttribute('data-laterano-connect', String(newValue))
+		}
 	}
 }
 
@@ -322,7 +326,9 @@ function setupConditionRendering(
 
 	const statePaths = ops.extractStatePathsFromExpression(expr)
 	for (const path of statePaths) {
-		if (!ops.stateToElementsMap[path]) ops.stateToElementsMap[path] = new Set()
+		if (!ops.stateToElementsMap[path]) {
+			ops.stateToElementsMap[path] = new Set()
+		}
 		ops.stateToElementsMap[path].add(element as HTMLElement)
 	}
 }
@@ -349,7 +355,9 @@ function evaluateExpressionWithItemContext(
 			let value = itemContext[itemVar]
 
 			for (const part of parts) {
-				if (value === undefined || value === null) return undefined
+				if (value === undefined || value === null) {
+					return undefined
+				}
 				value = (value as { [key: string]: unknown })[part]
 			}
 
@@ -461,7 +469,7 @@ function processElementWithItemContext(
 				const textNode = node as Text
 				const updatedContent = textContent.replace(
 					/\{\{\s*([^}]+)\s*\}\}/g,
-					(match, expr) => {
+					(_match, expr) => {
 						const value = evaluateExpressionWithItemContext(
 							expr.trim(),
 							itemContext,
@@ -476,8 +484,11 @@ function processElementWithItemContext(
 	}
 
 	// Process the text nodes of the element itself
-	for (const node of Array.from(element.childNodes))
-		if (node.nodeType === Node.TEXT_NODE) processTextNodes(node)
+	for (const node of Array.from(element.childNodes)) {
+		if (node.nodeType === Node.TEXT_NODE) {
+			processTextNodes(node)
+		}
+	}
 
 	// Process attribute bindings (:attr)
 	for (const attr of Array.from(element.attributes)) {
@@ -490,7 +501,9 @@ function processElementWithItemContext(
 				context,
 			)
 
-			if (value !== undefined) element.setAttribute(attrName, String(value))
+			if (value !== undefined) {
+				element.setAttribute(attrName, String(value))
+			}
 
 			// Remove the original binding attribute
 			element.removeAttribute(attr.name)
@@ -555,7 +568,9 @@ function processElementWithItemContext(
 			shouldDisplay = Boolean(result)
 
 			// Apply the condition
-			if (!shouldDisplay) (element as HTMLElement).style.display = 'none'
+			if (!shouldDisplay) {
+				;(element as HTMLElement).style.display = 'none'
+			}
 		}
 	}
 
@@ -581,11 +596,14 @@ function processElementWithItemContext(
 	}
 
 	// If this element is a list element, skip child element processing
-	if (hasForDirective) return
+	if (hasForDirective) {
+		return
+	}
 
 	// Recursively process all child elements
-	for (const child of Array.from(element.children))
+	for (const child of Array.from(element.children)) {
 		processElementWithItemContext(child, itemContext, context)
+	}
 }
 
 // Handle list rendering (%for macro)
@@ -643,22 +661,27 @@ function setupListRendering(
 		}
 
 		// Detach all currently rendered DOM items
-		for (const item of renderedItems)
-			if (item.element.parentNode === parentNode)
+		for (const item of renderedItems) {
+			if (item.element.parentNode === parentNode) {
 				parentNode.removeChild(item.element)
+			}
+		}
 
 		// Get key attribute if available
 		const keyAttr = template.getAttribute('%key')
-		if (!keyAttr)
+		if (!keyAttr) {
 			console.warn(
 				'%key attribute not found in the template, which is not a recommended practice.',
 			)
+		}
 
 		// Store a map of existing items by key for reuse
 		const existingElementsByKey = new Map()
-		for (const item of renderedItems)
-			if (item.key !== undefined) existingElementsByKey.set(item.key, item)
-
+		for (const item of renderedItems) {
+			if (item.key !== undefined) {
+				existingElementsByKey.set(item.key, item)
+			}
+		}
 		// Clear rendered items
 		renderedItems.length = 0
 
@@ -704,7 +727,9 @@ function setupListRendering(
 			const itemContext = {
 				[itemVar]: item,
 			}
-			if (indexVar) itemContext[indexVar] = index
+			if (indexVar) {
+				itemContext[indexVar] = index
+			}
 
 			// insert %key attribute
 			if (keyAttr) {
@@ -730,17 +755,20 @@ function setupListRendering(
 		placeholder.parentNode?.insertBefore(fragment, placeholder.nextSibling)
 
 		// Remove any remaining unused items
-		for (const item of existingElementsByKey.values())
-			if (item.element.parentNode)
+		for (const item of existingElementsByKey.values()) {
+			if (item.element.parentNode) {
 				item.element.parentNode.removeChild(item.element)
+			}
+		}
 	}
 
 	// Initial render
 	updateList()
 
 	// Set up state dependency for collection changes
-	if (!context.stateToElementsMap[collectionExpr])
+	if (!context.stateToElementsMap[collectionExpr]) {
 		context.stateToElementsMap[collectionExpr] = new Set()
+	}
 
 	// Using a unique identifier for this list rendering instance
 	const listVirtualElement = document.createElement('div')

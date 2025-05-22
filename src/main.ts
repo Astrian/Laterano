@@ -158,7 +158,9 @@ export default (options: ComponentOptions) => {
 
 		private _evaluateIfCondition(element: Element, condition: string) {
 			const info = this._conditionalElements.get(element)
-			if (!info) { return }
+			if (!info) {
+				return
+			}
 
 			// Evaluate the condition
 			const result = this._evaluateExpression(condition)
@@ -172,7 +174,9 @@ export default (options: ComponentOptions) => {
 						info.placeholder.nextSibling,
 					)
 					// Remove the element from the DOM
-				} else { element.parentNode?.removeChild(element) }
+				} else {
+					element.parentNode?.removeChild(element)
+				}
 
 				// Update the state
 				info.isPresent = shouldShow
@@ -366,7 +370,9 @@ export default (options: ComponentOptions) => {
 			let result = this._states
 
 			for (const part of parts) {
-				if (result === undefined || result === null) { return undefined }
+				if (result === undefined || result === null) {
+					return undefined
+				}
 				result = (result as { [key: string]: Record<string, unknown> })[part]
 			}
 
@@ -374,11 +380,15 @@ export default (options: ComponentOptions) => {
 		}
 
 		connectedCallback() {
-			if (onMount) { onMount.call(this) }
+			if (onMount) {
+				onMount.call(this)
+			}
 		}
 
 		disconnectedCallback() {
-			if (onUnmount) { onUnmount.call(this) }
+			if (onUnmount) {
+				onUnmount.call(this)
+			}
 		}
 
 		static get observedAttributes() {
@@ -390,7 +400,9 @@ export default (options: ComponentOptions) => {
 			oldValue: string,
 			newValue: string,
 		) {
-			if (onAttributeChanged) { onAttributeChanged(attrName, oldValue, newValue) }
+			if (onAttributeChanged) {
+				onAttributeChanged(attrName, oldValue, newValue)
+			}
 		}
 
 		// state manager
@@ -402,7 +414,9 @@ export default (options: ComponentOptions) => {
 			const parts = keyPath.split('.')
 			let result = this._states
 			for (const part of parts) {
-				if (result === undefined || result === null) { return undefined }
+				if (result === undefined || result === null) {
+					return undefined
+				}
 				result = (result as { [key: string]: Record<string, unknown> })[part]
 			}
 			return result

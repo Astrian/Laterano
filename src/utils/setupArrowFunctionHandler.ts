@@ -24,7 +24,9 @@ export default function setupArrowFunctionHandler(
 				throw new Error(`Invalid arrow function syntax: ${handlerValue}`)
 			}
 			const paramsStr = (() => {
-				if (splitted[0].includes('(')) return splitted[0].trim()
+				if (splitted[0].includes('(')) {
+					return splitted[0].trim()
+				}
 				return `(${splitted[0].trim()})`
 			})()
 			const bodyStr = splitted[1].trim()

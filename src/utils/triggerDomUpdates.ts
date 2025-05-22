@@ -25,8 +25,9 @@ export default function triggerDomUpdates(
 	if (ops.stateToElementsMap[keyPath]) {
 		const updateQueue = new Set<HTMLElement>()
 
-		for (const element of ops.stateToElementsMap[keyPath])
+		for (const element of ops.stateToElementsMap[keyPath]) {
 			updateQueue.add(element)
+		}
 
 		ops.scheduleUpdate(updateQueue)
 	}
@@ -34,18 +35,22 @@ export default function triggerDomUpdates(
 	// Update text bindings that depend on this state
 	if (ops.textBindings) {
 		// this._textBindings.forEach((binding) => {
-		for (const binding of ops.textBindings)
-			if (binding.expr === keyPath || binding.expr.startsWith(`${keyPath}.`))
+		for (const binding of ops.textBindings) {
+			if (binding.expr === keyPath || binding.expr.startsWith(`${keyPath}.`)) {
 				ops.updateTextNode(binding.node, binding.expr, binding.originalContent)
+			}
+		}
 	}
 
 	// Update attribute bindings that depend on this state
 	if (ops.attributeBindings) {
-		for (const binding of ops.attributeBindings)
+		for (const binding of ops.attributeBindings) {
 			if (binding.expr === keyPath || binding.expr.startsWith(`${keyPath}.`)) {
 				const value = ops.getNestedState(binding.expr)
-				if (value !== undefined)
+				if (value !== undefined) {
 					binding.element.setAttribute(binding.attrName, String(value))
+				}
 			}
+		}
 	}
 }
