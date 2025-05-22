@@ -83,8 +83,8 @@ export default (options: ComponentOptions) => {
 					conditionalElements: this._conditionalElements,
 					evaluateIfCondition: this._evaluateIfCondition.bind(this),
 				},
-				options.states,
-				options.statesListeners,
+				states,
+				statesListeners,
 			)
 
 			// initialize shadow dom
@@ -126,7 +126,9 @@ export default (options: ComponentOptions) => {
 
 		private _scheduleUpdate(elements: Set<HTMLElement>) {
 			requestAnimationFrame(() => {
-				for (const element of elements) this._updateElement(element)
+				for (const element of elements) {
+					this._updateElement(element)
+				}
 			})
 		}
 
@@ -142,8 +144,9 @@ export default (options: ComponentOptions) => {
 				const result = renderFunction()
 
 				// Update DOM
-				if (typeof result === 'string') element.innerHTML = result
-				else if (result instanceof Node) {
+				if (typeof result === 'string') {
+					element.innerHTML = result
+				} else if (result instanceof Node) {
 					element.innerHTML = ''
 					element.appendChild(result)
 				}
@@ -155,21 +158,21 @@ export default (options: ComponentOptions) => {
 
 		private _evaluateIfCondition(element: Element, condition: string) {
 			const info = this._conditionalElements.get(element)
-			if (!info) return
+			if (!info) { return }
 
 			// Evaluate the condition
 			const result = this._evaluateExpression(condition)
 			const shouldShow = Boolean(result)
 
 			if (shouldShow !== info.isPresent) {
-				if (shouldShow)
+				if (shouldShow) {
 					// Insert the element back into the DOM
 					info.placeholder.parentNode?.insertBefore(
 						element,
 						info.placeholder.nextSibling,
 					)
-				// Remove the element from the DOM
-				else element.parentNode?.removeChild(element)
+					// Remove the element from the DOM
+				} else { element.parentNode?.removeChild(element) }
 
 				// Update the state
 				info.isPresent = shouldShow
@@ -180,8 +183,9 @@ export default (options: ComponentOptions) => {
 		private _evaluateExpression(expression: string): unknown {
 			try {
 				// get the state keys and values
-				if (this._states[expression] !== undefined)
+				if (this._states[expression] !== undefined) {
 					return this._states[expression]
+				}
 
 				// execute the expression
 				const stateKeys = Object.keys(this._states)
@@ -189,10 +193,11 @@ export default (options: ComponentOptions) => {
 
 				const func = new Function(...stateKeys, `return ${expression}`)
 				const execRes = func(...stateValues)
-				if (typeof execRes !== 'boolean')
+				if (typeof execRes !== 'boolean') {
 					throw new Error(
 						`The expression "${expression}" must return a boolean value.`,
 					)
+				}
 				return execRes
 			} catch (error) {
 				console.error(`Error evaluating expression: ${expression}`, error)
@@ -232,15 +237,16 @@ export default (options: ComponentOptions) => {
 			// 	(name) => {
 			for (const name of Object.getOwnPropertyNames(
 				Object.getPrototypeOf(this),
-			))
+			)) {
 				if (
 					typeof (this as Record<string, unknown>)[name] === 'function' &&
 					name !== 'constructor'
-				)
+				) {
 					context[name] = (
 						this as unknown as Record<string, (...args: unknown[]) => unknown>
 					)[name].bind(this)
-
+				}
+			}
 			return context
 		}
 
@@ -360,7 +366,7 @@ export default (options: ComponentOptions) => {
 			let result = this._states
 
 			for (const part of parts) {
-				if (result === undefined || result === null) return undefined
+				if (result === undefined || result === null) { return undefined }
 				result = (result as { [key: string]: Record<string, unknown> })[part]
 			}
 
@@ -368,11 +374,11 @@ export default (options: ComponentOptions) => {
 		}
 
 		connectedCallback() {
-			if (onMount) onMount.call(this)
+			if (onMount) { onMount.call(this) }
 		}
 
 		disconnectedCallback() {
-			if (onUnmount) onUnmount.call(this)
+			if (onUnmount) { onUnmount.call(this) }
 		}
 
 		static get observedAttributes() {
@@ -384,7 +390,7 @@ export default (options: ComponentOptions) => {
 			oldValue: string,
 			newValue: string,
 		) {
-			if (onAttributeChanged) onAttributeChanged(attrName, oldValue, newValue)
+			if (onAttributeChanged) { onAttributeChanged(attrName, oldValue, newValue) }
 		}
 
 		// state manager
@@ -396,7 +402,7 @@ export default (options: ComponentOptions) => {
 			const parts = keyPath.split('.')
 			let result = this._states
 			for (const part of parts) {
-				if (result === undefined || result === null) return undefined
+				if (result === undefined || result === null) { return undefined }
 				result = (result as { [key: string]: Record<string, unknown> })[part]
 			}
 			return result

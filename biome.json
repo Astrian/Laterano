@@ -19,7 +19,22 @@
 	"linter": {
 		"enabled": true,
 		"rules": {
-			"recommended": true
+			"recommended": true,
+			"correctness": {
+				"noUnusedVariables": "error",
+				"noUndeclaredVariables": "error",
+				"noUnreachable": "error",
+				"noUnsafeFinally": "error"
+			},
+			"security": {
+				"noDangerouslySetInnerHtml": "error",
+				"noGlobalEval": "error"
+			},
+			"style": {
+				"noVar": "error",
+				"useBlockStatements": "error",
+				"useConst": "error"
+			}
 		}
 	},
 	"javascript": {
